@@ -2,6 +2,9 @@ FROM continuumio/miniconda3:latest
 
 WORKDIR /app
 
+# Install system dependencies for OpenCV and FFmpeg
+RUN apt-get update && apt-get install -y libgl1-mesa-glx libglib2.0-0 ffmpeg && rm -rf /var/lib/apt/lists/*
+
 # Install mamba
 RUN conda install -y mamba -n base -c conda-forge
 
@@ -21,6 +24,7 @@ COPY shared/ /app/shared/
 
 # Set environment variables
 ENV PATH /opt/conda/envs/video-preprocessing/bin:$PATH
+ENV PYTHONPATH /app:$PYTHONPATH
 
 # Run the application
 CMD ["conda", "run", "-n", "video-preprocessing", "python", "app/main.py"]

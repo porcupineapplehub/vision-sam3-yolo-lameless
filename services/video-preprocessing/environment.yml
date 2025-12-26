@@ -14,5 +14,5 @@ dependencies:
     - nats-py>=2.6.0
     - pyyaml>=6.0.1
     - numpy>=1.24.0
-    - moviepy>=1.0.3
+    - moviepy>=2.0.0
 

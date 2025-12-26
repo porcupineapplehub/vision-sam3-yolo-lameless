@@ -10,8 +10,8 @@ export default function Layout({ children }: LayoutProps) {
 
   const navItems = [
     { path: '/', label: 'Dashboard' },
-    { path: '/upload', label: 'Upload Video' },
-    { path: '/training', label: 'Training Queue' },
+    { path: '/upload', label: 'Upload Videos' },
+    { path: '/training', label: 'Training' },
     { path: '/models', label: 'Model Config' },
   ]
 

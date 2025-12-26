@@ -24,6 +24,10 @@ class NATSClient:
         if self.config_path.exists():
             with open(self.config_path) as f:
                 self.config = yaml.safe_load(f)
+            # Override NATS URL from environment if set
+            nats_url = os.getenv("NATS_URL")
+            if nats_url:
+                self.config["nats"]["url"] = nats_url
         else:
             # Fallback to environment variables
             self.config = {

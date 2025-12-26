@@ -9,7 +9,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 from ultralytics import YOLO
-from moviepy.editor import VideoFileClip
+from moviepy import VideoFileClip
 import yaml
 from shared.utils.nats_client import NATSClient
 

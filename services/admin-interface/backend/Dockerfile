@@ -21,6 +21,7 @@ COPY shared/ /app/shared/
 
 # Set environment variables
 ENV PATH /opt/conda/envs/admin-backend/bin:$PATH
+ENV PYTHONPATH /app:$PYTHONPATH
 
 # Expose port
 EXPOSE 8000

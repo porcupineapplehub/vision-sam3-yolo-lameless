@@ -3,6 +3,7 @@ DINOv3 Embedding Pipeline
 Extracts DINOv3 embeddings and stores in VectorDB for similarity search
 """
 import asyncio
+import os
 import json
 from pathlib import Path
 import cv2

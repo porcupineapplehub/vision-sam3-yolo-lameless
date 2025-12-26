@@ -21,6 +21,7 @@ COPY shared/ /app/shared/
 
 # Set environment variables
 ENV PATH /opt/conda/envs/ml-pipeline/bin:$PATH
+ENV PYTHONPATH /app:$PYTHONPATH
 
 # Run the application
 CMD ["conda", "run", "-n", "ml-pipeline", "python", "app/main.py"]

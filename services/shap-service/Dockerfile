@@ -21,7 +21,9 @@ COPY shared/ /app/shared/
 
 # Set environment variables
 ENV PATH /opt/conda/envs/shap-service/bin:$PATH
+ENV PYTHONPATH /app:$PYTHONPATH
 
 # Run the application
 CMD ["conda", "run", "-n", "shap-service", "python", "app/main.py"]
+
 

@@ -8,10 +8,11 @@ services:
     volumes:
       - nats-data:/data
     healthcheck:
-      test: ["CMD", "nats", "server", "check", "--server", "nats://localhost:4222"]
+      test: ["CMD", "/nats-server", "--help"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 5s
 
   postgres:
     image: postgres:15-alpine
@@ -37,10 +38,11 @@ services:
     volumes:
       - qdrant-data:/qdrant/storage
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:6333/health"]
+      test: ["CMD-SHELL", "timeout 2 bash -c '</dev/tcp/localhost/6333' || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 10s
 
   video-ingestion:
     build:

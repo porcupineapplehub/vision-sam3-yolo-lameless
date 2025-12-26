@@ -1,7 +1,7 @@
 # Shared configuration for all services
 
 nats:
-  url: ${NATS_URL:-nats://localhost:4222}
+  url: nats://nats:4222
   subjects:
     video_uploaded: "video.uploaded"
     video_preprocessed: "video.preprocessed"
@@ -19,12 +19,12 @@ nats:
     training_completed: "training.completed"
 
 database:
-  url: ${POSTGRES_URL:-postgresql://lameness_user:lameness_pass@localhost:5432/lameness_db}
+  url: postgresql://lameness_user:lameness_pass@postgres:5432/lameness_db
   pool_size: 10
   max_overflow: 20
 
 qdrant:
-  url: ${QDRANT_URL:-http://localhost:6333}
+  url: http://qdrant:6333
   collection_name: "cow_embeddings"
 
 data:
