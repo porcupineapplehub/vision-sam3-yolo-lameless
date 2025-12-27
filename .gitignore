@@ -14,6 +14,39 @@ ENV/
 dist/
 build/
 
+data/ap10k/**/*
+data/ap-10k/**/*
+
+data/Cow Pose Estimation/**/*
+data/cow_pose_combined/**/*
+data/cow_pose_full/**/*
+data/pose_datasets/**/*
+
+data/video_annotations/**/*
+
+data/cow-pose-yolo/**/*
+
+
+data/cow_pose_lameness/**/*
+data/cow-pose-estimation.v1.yolov8/**/*
+data/cow-pose-estimation.v1i.yolov8/**/*
+
+data/test_results/**/*
+
+runs/cow_pose/**/*
+runs/pose/**/*
+
+data/ap-10k.zip
+
+
+
+
+
+
+
+
+
+
 # Conda
 .conda/
 

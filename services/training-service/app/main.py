@@ -48,9 +48,8 @@ class TrainingService:
         self.min_samples = training_config.get("min_new_videos", 10)  # Minimum labeled videos to start training
         self.cv_folds = training_config.get("cv_folds", 5)
         
-        # Auto-training settings
-        self.auto_training_enabled = True
-        self.check_interval = 60  # Check every 60 seconds
+        # Training settings (auto-training disabled - manual trigger only)
+        self.auto_training_enabled = False
         self.last_training_count = 0
         self.training_in_progress = False
         
@@ -375,41 +374,36 @@ class TrainingService:
         await self.run_training()
     
     async def handle_label_added(self, data: Dict):
-        """Handle new label added event"""
+        """Handle new label added event - just log, no auto-training"""
         print(f"New label added: {data}")
-        
-        if self.auto_training_enabled:
-            await self.check_and_train()
     
     async def start(self):
         """Start the training service"""
         await self.nats_client.connect()
         
-        # Subscribe to training requests
+        # Subscribe to training requests (manual trigger only)
         await self.nats_client.subscribe(
             self.config["nats"]["subjects"]["training_ml_requested"],
             self.handle_training_request
         )
         
-        # Subscribe to new labels
+        # Subscribe to new labels (for logging only)
         await self.nats_client.subscribe(
             self.config["nats"]["subjects"]["training_data_added"],
             self.handle_label_added
         )
         
-        print("Training service started")
-        print(f"Auto-training: {'enabled' if self.auto_training_enabled else 'disabled'}")
-        print(f"Minimum samples: {self.min_samples}")
-        print(f"Check interval: {self.check_interval}s")
+        # Get current stats
+        df = self.get_labeled_data()
         
-        # Initial check
-        await self.check_and_train()
+        print("Training service started (Manual trigger only)")
+        print(f"Current labeled samples: {len(df)}")
+        print(f"Minimum samples required: {self.min_samples}")
+        print("Waiting for manual training requests...")
         
-        # Periodic check loop
+        # Keep service running
         while True:
-            await asyncio.sleep(self.check_interval)
-            if self.auto_training_enabled:
-                await self.check_and_train()
+            await asyncio.sleep(3600)  # Sleep for 1 hour, just to keep alive
 
 
 async def main():

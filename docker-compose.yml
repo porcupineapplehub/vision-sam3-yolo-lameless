@@ -21,7 +21,7 @@ services:
       POSTGRES_USER: lameness_user
       POSTGRES_PASSWORD: lameness_pass
     ports:
-      - "5433:5432"
+      - "5434:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
@@ -33,8 +33,8 @@ services:
   qdrant:
     image: qdrant/qdrant:latest
     ports:
-      - "6333:6333"
-      - "6334:6334"
+      - "6335:6333"
+      - "6336:6334"
     volumes:
       - qdrant-data:/qdrant/storage
     healthcheck:
@@ -126,6 +126,7 @@ services:
       - ./shared:/app/shared
     environment:
       - NATS_URL=nats://nats:4222
+      - PYTHONUNBUFFERED=1
     depends_on:
       - nats
       - video-preprocessing
@@ -189,6 +190,20 @@ services:
     depends_on:
       - nats
       - postgres
+
+  annotation-renderer:
+    build:
+      context: .
+      dockerfile: services/annotation-renderer/Dockerfile
+    volumes:
+      - ./data:/app/data
+      - ./shared:/app/shared
+    environment:
+      - NATS_URL=nats://nats:4222
+    depends_on:
+      - nats
+    ports:
+      - "8002:8000"
 
   admin-backend:
     build:

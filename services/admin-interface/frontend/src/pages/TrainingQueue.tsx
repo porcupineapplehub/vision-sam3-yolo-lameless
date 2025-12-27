@@ -197,15 +197,15 @@ export default function TrainingQueue() {
         </div>
       </div>
 
-      {/* Auto-Training Info */}
-      <div className="border rounded-lg p-4 mb-6 bg-blue-50 border-blue-200">
+      {/* Training Info */}
+      <div className="border rounded-lg p-4 mb-6 bg-amber-50 border-amber-200">
         <div className="flex items-start gap-3">
-          <div className="text-blue-600 text-xl">ℹ️</div>
+          <div className="text-amber-600 text-xl">📋</div>
           <div>
-            <h4 className="font-medium text-blue-800">Auto-Training</h4>
-            <p className="text-sm text-blue-700">
-              Training automatically starts when you have at least 10 labeled videos with both Sound and Lame samples.
-              The system checks for new data every 60 seconds. You can also manually trigger training using the button above.
+            <h4 className="font-medium text-amber-800">Manual Training</h4>
+            <p className="text-sm text-amber-700">
+              Click "Start Training" when you're ready to train models. You need at least 10 labeled videos 
+              with both Sound and Lame samples. Training uses CatBoost, XGBoost, LightGBM, and creates an ensemble model.
             </p>
           </div>
         </div>

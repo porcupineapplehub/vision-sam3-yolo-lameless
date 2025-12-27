@@ -57,6 +57,42 @@ export const videosApi = {
     const response = await apiClient.get('/api/videos', { params: { skip, limit } })
     return response.data
   },
+  getStreamUrl: (videoId: string) => {
+    return `${API_BASE_URL}/api/videos/${videoId}/stream`
+  },
+  getAnnotatedUrl: (videoId: string) => {
+    return `${API_BASE_URL}/api/videos/${videoId}/annotated`
+  },
+  getFrameUrl: (videoId: string, frameNum: number, annotated = false) => {
+    return `${API_BASE_URL}/api/videos/${videoId}/frame/${frameNum}?annotated=${annotated}`
+  },
+  triggerAnnotation: async (videoId: string, options?: {
+    include_yolo?: boolean
+    include_pose?: boolean
+    show_confidence?: boolean
+    show_labels?: boolean
+  }) => {
+    const response = await apiClient.post(`/api/videos/${videoId}/annotate`, null, {
+      params: options || {}
+    })
+    return response.data
+  },
+  getAnnotationStatus: async (videoId: string) => {
+    const response = await apiClient.get(`/api/videos/${videoId}/annotation-status`)
+    return response.data
+  },
+  deleteAnnotation: async (videoId: string) => {
+    const response = await apiClient.delete(`/api/videos/${videoId}/annotation`)
+    return response.data
+  },
+  getDetections: async (videoId: string) => {
+    const response = await apiClient.get(`/api/videos/${videoId}/detections`)
+    return response.data
+  },
+  getPose: async (videoId: string) => {
+    const response = await apiClient.get(`/api/videos/${videoId}/pose`)
+    return response.data
+  },
 }
 
 // Analysis endpoints
@@ -104,6 +140,30 @@ export const trainingApi = {
     const response = await apiClient.post('/api/training/yolo/start')
     return response.data
   },
+  // Pairwise comparison endpoints
+  submitPairwise: async (videoId1: string, videoId2: string, winner: number, confidence = 'confident') => {
+    const response = await apiClient.post('/api/training/pairwise', {
+      video_id_1: videoId1,
+      video_id_2: videoId2,
+      winner,
+      confidence,
+    })
+    return response.data
+  },
+  getNextPairwise: async (excludeCompleted = true) => {
+    const response = await apiClient.get('/api/training/pairwise/next', {
+      params: { exclude_completed: excludeCompleted }
+    })
+    return response.data
+  },
+  getPairwiseStats: async () => {
+    const response = await apiClient.get('/api/training/pairwise/stats')
+    return response.data
+  },
+  getPairwiseRanking: async () => {
+    const response = await apiClient.get('/api/training/pairwise/ranking')
+    return response.data
+  },
 }
 
 // Model endpoints
@@ -128,9 +188,12 @@ export const shapApi = {
     const response = await apiClient.get(`/api/shap/${videoId}/local`)
     return response.data
   },
+  getForcePlot: async (videoId: string) => {
+    const response = await apiClient.get(`/api/shap/${videoId}/force-plot`)
+    return response.data
+  },
   getGlobal: async () => {
     const response = await apiClient.get('/api/shap/global')
     return response.data
   },
 }
-

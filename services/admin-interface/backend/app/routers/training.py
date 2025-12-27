@@ -4,16 +4,20 @@ Training endpoints
 import os
 import json
 import nats
+import random
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 from pathlib import Path
 from datetime import datetime
+from itertools import combinations
 
 router = APIRouter()
 
 TRAINING_DIR = Path("/app/data/training")
 RESULTS_DIR = Path("/app/data/results")
+VIDEOS_DIR = Path("/app/data/videos")
+PAIRWISE_DIR = TRAINING_DIR / "pairwise"
 
 # NATS connection
 nats_client = None
@@ -223,4 +227,216 @@ async def get_trained_models():
     return {
         "models": models,
         "total": len(models)
+    }
+
+
+# ==================== Pairwise Comparison Endpoints ====================
+
+class PairwiseComparisonRequest(BaseModel):
+    video_id_1: str
+    video_id_2: str
+    winner: int  # 1 = video_1 more lame, 2 = video_2 more lame, 0 = equal
+    confidence: str = "confident"  # very_confident, confident, uncertain
+
+
+@router.post("/pairwise")
+async def submit_pairwise_comparison(comparison: PairwiseComparisonRequest):
+    """Submit a pairwise comparison result"""
+    PAIRWISE_DIR.mkdir(parents=True, exist_ok=True)
+    
+    # Create comparison ID
+    pair_key = f"{min(comparison.video_id_1, comparison.video_id_2)}_{max(comparison.video_id_1, comparison.video_id_2)}"
+    
+    comparison_data = {
+        "video_id_1": comparison.video_id_1,
+        "video_id_2": comparison.video_id_2,
+        "winner": comparison.winner,
+        "confidence": comparison.confidence,
+        "timestamp": datetime.utcnow().isoformat()
+    }
+    
+    # Load existing comparisons for this pair
+    comparison_file = PAIRWISE_DIR / f"{pair_key}.json"
+    comparisons = []
+    if comparison_file.exists():
+        with open(comparison_file) as f:
+            data = json.load(f)
+            comparisons = data.get("comparisons", [])
+    
+    comparisons.append(comparison_data)
+    
+    # Save updated comparisons
+    with open(comparison_file, "w") as f:
+        json.dump({
+            "pair_key": pair_key,
+            "video_id_1": comparison.video_id_1,
+            "video_id_2": comparison.video_id_2,
+            "comparisons": comparisons
+        }, f, indent=2)
+    
+    return {
+        "status": "saved",
+        "pair_key": pair_key,
+        "total_comparisons": len(comparisons)
+    }
+
+
+@router.get("/pairwise/next")
+async def get_next_pairwise(exclude_completed: bool = True):
+    """Get the next video pair to compare"""
+    PAIRWISE_DIR.mkdir(parents=True, exist_ok=True)
+    
+    # Get all video IDs
+    video_ids = []
+    for video_file in VIDEOS_DIR.glob("*.*"):
+        if video_file.is_file() and video_file.suffix.lower() in [".mp4", ".avi", ".mov", ".mkv"]:
+            video_id = video_file.stem.split("_")[0]
+            video_ids.append(video_id)
+    
+    if len(video_ids) < 2:
+        raise HTTPException(status_code=400, detail="Need at least 2 videos for pairwise comparison")
+    
+    # Generate all possible pairs
+    all_pairs = list(combinations(sorted(video_ids), 2))
+    
+    # Get completed pairs
+    completed_pairs = set()
+    if exclude_completed:
+        for pair_file in PAIRWISE_DIR.glob("*.json"):
+            pair_key = pair_file.stem
+            completed_pairs.add(pair_key)
+    
+    # Find pairs that haven't been compared yet
+    pending_pairs = []
+    for v1, v2 in all_pairs:
+        pair_key = f"{v1}_{v2}"
+        if pair_key not in completed_pairs:
+            pending_pairs.append((v1, v2))
+    
+    if not pending_pairs:
+        return {
+            "status": "all_completed",
+            "total_pairs": len(all_pairs),
+            "completed_pairs": len(completed_pairs)
+        }
+    
+    # Select a random pending pair
+    video_id_1, video_id_2 = random.choice(pending_pairs)
+    
+    # Randomly swap order to avoid bias
+    if random.random() > 0.5:
+        video_id_1, video_id_2 = video_id_2, video_id_1
+    
+    return {
+        "video_id_1": video_id_1,
+        "video_id_2": video_id_2,
+        "pending_pairs": len(pending_pairs),
+        "total_pairs": len(all_pairs),
+        "completed_pairs": len(completed_pairs)
+    }
+
+
+@router.get("/pairwise/stats")
+async def get_pairwise_stats():
+    """Get pairwise comparison statistics"""
+    PAIRWISE_DIR.mkdir(parents=True, exist_ok=True)
+    
+    total_comparisons = 0
+    pairs_compared = 0
+    
+    for pair_file in PAIRWISE_DIR.glob("*.json"):
+        with open(pair_file) as f:
+            data = json.load(f)
+            comparisons = data.get("comparisons", [])
+            total_comparisons += len(comparisons)
+            pairs_compared += 1
+    
+    # Count total possible pairs
+    video_ids = []
+    for video_file in VIDEOS_DIR.glob("*.*"):
+        if video_file.is_file() and video_file.suffix.lower() in [".mp4", ".avi", ".mov", ".mkv"]:
+            video_id = video_file.stem.split("_")[0]
+            video_ids.append(video_id)
+    
+    total_possible_pairs = len(list(combinations(video_ids, 2))) if len(video_ids) >= 2 else 0
+    
+    return {
+        "total_comparisons": total_comparisons,
+        "pairs_compared": pairs_compared,
+        "total_possible_pairs": total_possible_pairs,
+        "completion_rate": pairs_compared / total_possible_pairs if total_possible_pairs > 0 else 0
+    }
+
+
+@router.get("/pairwise/ranking")
+async def get_elo_ranking():
+    """Calculate and return Elo-based lameness ranking"""
+    PAIRWISE_DIR.mkdir(parents=True, exist_ok=True)
+    
+    # Initialize Elo ratings
+    elo_ratings = {}
+    K = 32  # Elo K-factor
+    
+    # Process all comparisons
+    all_comparisons = []
+    for pair_file in PAIRWISE_DIR.glob("*.json"):
+        with open(pair_file) as f:
+            data = json.load(f)
+            for comp in data.get("comparisons", []):
+                all_comparisons.append(comp)
+    
+    # Initialize ratings for all videos
+    video_ids = set()
+    for comp in all_comparisons:
+        video_ids.add(comp["video_id_1"])
+        video_ids.add(comp["video_id_2"])
+    
+    for vid in video_ids:
+        elo_ratings[vid] = 1500  # Starting Elo
+    
+    # Process comparisons chronologically
+    all_comparisons.sort(key=lambda x: x.get("timestamp", ""))
+    
+    for comp in all_comparisons:
+        v1, v2 = comp["video_id_1"], comp["video_id_2"]
+        winner = comp["winner"]
+        
+        if v1 not in elo_ratings:
+            elo_ratings[v1] = 1500
+        if v2 not in elo_ratings:
+            elo_ratings[v2] = 1500
+        
+        r1, r2 = elo_ratings[v1], elo_ratings[v2]
+        
+        # Expected scores
+        e1 = 1 / (1 + 10 ** ((r2 - r1) / 400))
+        e2 = 1 / (1 + 10 ** ((r1 - r2) / 400))
+        
+        # Actual scores (1 = v1 more lame, 2 = v2 more lame, 0 = tie)
+        if winner == 1:
+            s1, s2 = 1, 0
+        elif winner == 2:
+            s1, s2 = 0, 1
+        else:
+            s1, s2 = 0.5, 0.5
+        
+        # Update ratings
+        elo_ratings[v1] = r1 + K * (s1 - e1)
+        elo_ratings[v2] = r2 + K * (s2 - e2)
+    
+    # Create ranking (higher Elo = more lame)
+    ranking = [
+        {"video_id": vid, "elo_rating": round(rating, 1), "rank": 0}
+        for vid, rating in elo_ratings.items()
+    ]
+    ranking.sort(key=lambda x: x["elo_rating"], reverse=True)
+    
+    # Assign ranks
+    for i, item in enumerate(ranking):
+        item["rank"] = i + 1
+    
+    return {
+        "ranking": ranking,
+        "total_videos": len(ranking),
+        "total_comparisons": len(all_comparisons)
     }

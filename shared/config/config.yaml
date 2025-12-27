@@ -50,6 +50,6 @@ training:
     batch_size: 16
     epochs: 100
   ml:
-    min_new_videos: 50
+    min_new_videos: 10
     cv_folds: 5
 

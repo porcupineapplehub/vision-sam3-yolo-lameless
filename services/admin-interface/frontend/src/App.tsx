@@ -5,6 +5,7 @@ import VideoUpload from './pages/VideoUpload'
 import VideoAnalysis from './pages/VideoAnalysis'
 import TrainingQueue from './pages/TrainingQueue'
 import ModelConfig from './pages/ModelConfig'
+import PairwiseReview from './pages/PairwiseReview'
 
 function App() {
   return (
@@ -14,6 +15,7 @@ function App() {
           <Route path="/" element={<Dashboard />} />
           <Route path="/upload" element={<VideoUpload />} />
           <Route path="/video/:videoId" element={<VideoAnalysis />} />
+          <Route path="/pairwise" element={<PairwiseReview />} />
           <Route path="/training" element={<TrainingQueue />} />
           <Route path="/models" element={<ModelConfig />} />
         </Routes>
@@ -23,4 +25,3 @@ function App() {
 }
 
 export default App
-

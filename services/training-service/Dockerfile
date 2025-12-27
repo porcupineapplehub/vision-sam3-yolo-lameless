@@ -22,7 +22,8 @@ COPY shared/ /app/shared/
 # Set environment variables
 ENV PATH /opt/conda/envs/training-service/bin:$PATH
 ENV PYTHONPATH /app:$PYTHONPATH
+ENV PYTHONUNBUFFERED=1
 
 # Run the application
-CMD ["conda", "run", "-n", "training-service", "python", "app/main.py"]
+CMD ["conda", "run", "--no-capture-output", "-n", "training-service", "python", "-u", "app/main.py"]
 
