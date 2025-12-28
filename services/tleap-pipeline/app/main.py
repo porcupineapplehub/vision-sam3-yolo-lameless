@@ -103,8 +103,8 @@ class CowPoseEstimator:
         try:
             from ultralytics import YOLO
             
-            # Check for trained cow pose model
-            cow_pose_model = Path("/app/data/models/cow_pose_full.pt")
+            # Check for trained cow pose model (Roboflow trained - 20 keypoints, 95.5% mAP)
+            cow_pose_model = Path("/app/data/models/cow_pose_roboflow.pt")
             if cow_pose_model.exists():
                 self.model = YOLO(str(cow_pose_model))
                 self.use_trained_model = True
