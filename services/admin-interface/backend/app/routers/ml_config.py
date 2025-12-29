@@ -704,5 +704,63 @@ async def get_parameter_descriptions():
                 "default": 0.5,
                 "range": [0.0, 1.0]
             }
+        },
+        "training": {
+            "min_samples": {
+                "name": "Minimum Samples",
+                "description": "Minimum number of labeled samples required before training can start. Set based on your data volume.",
+                "category": "Training",
+                "default": 10,
+                "range": [2, 1000]
+            },
+            "cv_folds": {
+                "name": "Cross-Validation Folds",
+                "description": "Number of folds for cross-validation. More folds = more reliable evaluation but slower training.",
+                "category": "Training",
+                "default": 5,
+                "range": [2, 20]
+            },
+            "test_size": {
+                "name": "Test Set Size",
+                "description": "Proportion of data reserved for final evaluation. Typical values: 0.2-0.3.",
+                "category": "Training",
+                "default": 0.2,
+                "range": [0.1, 0.5]
+            },
+            "stratify": {
+                "name": "Stratified Splits",
+                "description": "Maintain class balance in train/test splits. Always recommended for classification tasks.",
+                "category": "Training",
+                "default": True,
+                "options": [True, False]
+            },
+            "shuffle": {
+                "name": "Shuffle Data",
+                "description": "Randomly shuffle data before splitting. Usually keep enabled unless data is time-series.",
+                "category": "Training",
+                "default": True,
+                "options": [True, False]
+            },
+            "early_stopping_rounds": {
+                "name": "Early Stopping Rounds",
+                "description": "Stop training if no improvement for N rounds. Set 10-50 to prevent overfitting. Leave empty to disable.",
+                "category": "Training",
+                "default": None,
+                "range": [1, 100]
+            },
+            "feature_selection": {
+                "name": "Feature Selection",
+                "description": "Automatically select most important features before training. Enable if you have many irrelevant features.",
+                "category": "Training",
+                "default": False,
+                "options": [True, False]
+            },
+            "scale_features": {
+                "name": "Scale Features",
+                "description": "Standardize feature values (mean=0, std=1). Usually recommended for consistent performance.",
+                "category": "Training",
+                "default": True,
+                "options": [True, False]
+            }
         }
     }

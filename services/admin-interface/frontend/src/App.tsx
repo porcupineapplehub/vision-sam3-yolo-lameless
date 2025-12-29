@@ -18,6 +18,7 @@ import VideoResults from './pages/VideoResults'
 import MLConfiguration from './pages/MLConfiguration'
 import UserManagement from './pages/UserManagement'
 import TutorialManagement from './pages/TutorialManagement'
+import Settings from './pages/Settings'
 
 function App() {
   return (
@@ -58,6 +59,9 @@ function App() {
                   <Route path="/hierarchy" element={<HierarchyVisualization />} />
                   <Route path="/similarity" element={<SimilarityMap />} />
                   <Route path="/learn" element={<TrainingModule />} />
+
+                  {/* Settings - all authenticated users */}
+                  <Route path="/settings" element={<Settings />} />
 
                   {/* Training & Models - researcher and above */}
                   <Route

@@ -242,6 +242,7 @@ export default function Layout({ children }: LayoutProps) {
                   <button
                     onClick={() => {
                       setIsUserMenuOpen(false)
+                      navigate('/settings')
                     }}
                     className="w-full flex items-center gap-2 px-3 py-2 rounded-md hover:bg-accent transition-colors text-sm"
                   >
