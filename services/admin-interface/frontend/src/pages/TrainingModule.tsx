@@ -847,22 +847,22 @@ export default function TrainingModule() {
                           className={`p-3 rounded-lg border-2 transition-all text-center ${
                             showFeedback
                               ? isCorrect
-                                ? 'border-green-500 bg-green-50'
+                                ? 'border-success bg-success/10'
                                 : isWrong
-                                  ? 'border-red-500 bg-red-50'
-                                  : 'border-gray-200 opacity-50'
+                                  ? 'border-destructive bg-destructive/10'
+                                  : 'border-border opacity-50'
                               : isSelected
-                                ? 'border-blue-500 bg-blue-50'
-                                : 'border-gray-200 hover:border-blue-300 hover:bg-blue-50'
+                                ? 'border-primary bg-primary/10'
+                                : 'border-border hover:border-primary/50 hover:bg-primary/5'
                           }`}
                         >
                           <div className="text-lg font-bold">{item.short}</div>
-                          <div className="text-xs text-gray-500 mt-1">{item.label}</div>
+                          <div className="text-xs text-muted-foreground mt-1">{item.label}</div>
                         </button>
                       )
                     })}
                   </div>
-                  <div className="flex justify-between text-xs text-gray-400 px-4">
+                  <div className="flex justify-between text-xs text-muted-foreground px-4">
                     <span>← A is more lame</span>
                     <span>B is more lame →</span>
                   </div>
@@ -876,17 +876,17 @@ export default function TrainingModule() {
                       showFeedback
                         ? selectedAnswer === 0
                           ? currentExample.correct_winner === 0
-                            ? 'border-green-500 bg-green-50'
-                            : 'border-red-500 bg-red-50'
+                            ? 'border-success bg-success/10'
+                            : 'border-destructive bg-destructive/10'
                           : currentExample.correct_winner === 0
-                            ? 'border-green-500 bg-green-50 opacity-50'
-                            : 'border-gray-200 opacity-50'
-                        : 'border-green-200 hover:border-green-400 hover:bg-green-50'
+                            ? 'border-success bg-success/10 opacity-50'
+                            : 'border-border opacity-50'
+                        : 'border-success/30 hover:border-success/60 hover:bg-success/5'
                     }`}
                   >
                     <div className="text-4xl mb-2">✓</div>
-                    <div className="font-bold text-lg text-green-700">Healthy</div>
-                    <div className="text-sm text-gray-500">No lameness detected</div>
+                    <div className="font-bold text-lg text-success">Healthy</div>
+                    <div className="text-sm text-muted-foreground">No lameness detected</div>
                   </button>
 
                   <button
@@ -896,17 +896,17 @@ export default function TrainingModule() {
                       showFeedback
                         ? selectedAnswer === 1
                           ? currentExample.correct_winner !== 0
-                            ? 'border-green-500 bg-green-50'
-                            : 'border-red-500 bg-red-50'
+                            ? 'border-success bg-success/10'
+                            : 'border-destructive bg-destructive/10'
                           : currentExample.correct_winner !== 0
-                            ? 'border-green-500 bg-green-50 opacity-50'
-                            : 'border-gray-200 opacity-50'
-                        : 'border-red-200 hover:border-red-400 hover:bg-red-50'
+                            ? 'border-success bg-success/10 opacity-50'
+                            : 'border-border opacity-50'
+                        : 'border-destructive/30 hover:border-destructive/60 hover:bg-destructive/5'
                     }`}
                   >
                     <div className="text-4xl mb-2">✗</div>
-                    <div className="font-bold text-lg text-red-700">Lame</div>
-                    <div className="text-sm text-gray-500">Shows lameness signs</div>
+                    <div className="font-bold text-lg text-destructive">Lame</div>
+                    <div className="text-sm text-muted-foreground">Shows lameness signs</div>
                   </button>
                 </div>
               )}
@@ -919,10 +919,10 @@ export default function TrainingModule() {
                     (selectedAnswer === 0 && currentExample.correct_winner === 0) ||
                     (selectedAnswer === 1 && currentExample.correct_winner !== 0)
                   ))
-                    ? 'bg-green-100 border border-green-300'
+                    ? 'bg-success/20 border border-success/40'
                     : Math.abs((selectedAnswer || 0) - getCorrectAnswerValue()) === 1
-                      ? 'bg-yellow-100 border border-yellow-300'
-                      : 'bg-red-100 border border-red-300'
+                      ? 'bg-warning/20 border border-warning/40'
+                      : 'bg-destructive/20 border border-destructive/40'
                 }`}>
                   <div className="flex items-start gap-3">
                     <span className="text-2xl">
@@ -943,10 +943,10 @@ export default function TrainingModule() {
                           (selectedAnswer === 0 && currentExample.correct_winner === 0) ||
                           (selectedAnswer === 1 && currentExample.correct_winner !== 0)
                         ))
-                          ? 'text-green-800'
+                          ? 'text-success'
                           : Math.abs((selectedAnswer || 0) - getCorrectAnswerValue()) === 1
-                            ? 'text-yellow-800'
-                            : 'text-red-800'
+                            ? 'text-warning'
+                            : 'text-destructive'
                       }`}>
                         {selectedAnswer === getCorrectAnswerValue() ||
                          (trainingMode === 'binary' && (
@@ -965,7 +965,7 @@ export default function TrainingModule() {
                       </p>
 
                       {streak >= 3 && selectedAnswer === getCorrectAnswerValue() && (
-                        <div className="mt-2 text-orange-600 font-medium">
+                        <div className="mt-2 text-warning font-medium">
                           🔥 {streak} streak! +{Math.floor(streak / 3)} bonus points!
                         </div>
                       )}
@@ -974,7 +974,7 @@ export default function TrainingModule() {
 
                   <button
                     onClick={handleNext}
-                    className="mt-4 w-full py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700"
+                    className="mt-4 w-full py-3 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90"
                   >
                     Next Example →
                   </button>
@@ -1122,7 +1122,7 @@ export default function TrainingModule() {
                 setCurrentLevel(TRAINING_LEVELS[0])
               }
             }}
-            className="text-red-600 text-sm hover:underline"
+            className="text-destructive text-sm hover:underline"
           >
             Reset Progress
           </button>
@@ -1266,9 +1266,9 @@ export default function TrainingModule() {
                   <div key={name} className="flex items-center gap-3">
                     <div className="flex-1 text-sm truncate">{name}</div>
                     <div className="w-32">
-                      <div className="h-2 bg-gray-200 rounded-full">
+                      <div className="h-2 bg-muted rounded-full">
                         <div
-                          className={`h-2 rounded-full ${progress === -1 ? 'bg-red-500' : 'bg-blue-500'}`}
+                          className={`h-2 rounded-full ${progress === -1 ? 'bg-destructive' : 'bg-primary'}`}
                           style={{ width: `${progress === -1 ? 100 : progress}%` }}
                         />
                       </div>
@@ -1326,12 +1326,12 @@ export default function TrainingModule() {
                         controls
                         muted
                       />
-                      <div className="absolute top-2 left-2 px-2 py-1 bg-blue-500 text-white text-xs font-bold rounded">
+                      <div className="absolute top-2 left-2 px-2 py-1 bg-primary text-primary-foreground text-xs font-bold rounded">
                         A
                       </div>
                     </div>
                   ) : (
-                    <div className="aspect-video flex flex-col items-center justify-center text-gray-400">
+                    <div className="aspect-video flex flex-col items-center justify-center text-muted-foreground">
                       <span className="text-4xl mb-2">📥</span>
                       <span className="text-sm">Drop Video A here</span>
                     </div>
@@ -1578,14 +1578,14 @@ export default function TrainingModule() {
                                     onMouseEnter={(e) => e.currentTarget.play()}
                                     onMouseLeave={(e) => { e.currentTarget.pause(); e.currentTarget.currentTime = 0 }}
                                   />
-                                  <div className="absolute top-1 left-1 px-1 py-0.5 bg-blue-500 text-white text-xs font-bold rounded">A</div>
+                                  <div className="absolute top-1 left-1 px-1 py-0.5 bg-primary text-primary-foreground text-xs font-bold rounded">A</div>
                                 </div>
                               ) : (
-                                <div className="w-24 h-14 bg-gray-200 rounded flex items-center justify-center text-gray-400">A</div>
+                                <div className="w-24 h-14 bg-muted rounded flex items-center justify-center text-muted-foreground">A</div>
                               )}
-                              <span className="text-gray-400">vs</span>
+                              <span className="text-muted-foreground">vs</span>
                               {ex.video_id_2 ? (
-                                <div className="w-24 h-14 bg-gray-100 rounded overflow-hidden relative group">
+                                <div className="w-24 h-14 bg-muted rounded overflow-hidden relative group">
                                   <video
                                     src={videosApi.getStreamUrl(ex.video_id_2)}
                                     className="w-full h-full object-cover"
@@ -1593,10 +1593,10 @@ export default function TrainingModule() {
                                     onMouseEnter={(e) => e.currentTarget.play()}
                                     onMouseLeave={(e) => { e.currentTarget.pause(); e.currentTarget.currentTime = 0 }}
                                   />
-                                  <div className="absolute top-1 left-1 px-1 py-0.5 bg-green-500 text-white text-xs font-bold rounded">B</div>
+                                  <div className="absolute top-1 left-1 px-1 py-0.5 bg-success text-primary-foreground text-xs font-bold rounded">B</div>
                                 </div>
                               ) : (
-                                <div className="w-24 h-14 bg-gray-200 rounded flex items-center justify-center text-gray-400">B</div>
+                                <div className="w-24 h-14 bg-muted rounded flex items-center justify-center text-muted-foreground">B</div>
                               )}
                             </div>
                           </td>
@@ -1626,7 +1626,7 @@ export default function TrainingModule() {
                               </button>
                               <button
                                 onClick={() => handleDeleteExample(ex.id)}
-                                className="px-3 py-1 text-sm text-red-600 border border-red-200 rounded hover:bg-red-50"
+                                className="px-3 py-1 text-sm text-destructive border border-destructive/30 rounded hover:bg-destructive/10"
                               >
                                 Delete
                               </button>

@@ -115,18 +115,18 @@ export default function ShapExplanation({ videoId, compact = false }: ShapExplan
       <div className="space-y-2">
         <div className="flex justify-between items-center">
           <span className="text-sm font-medium">Why this prediction?</span>
-          <span className={`text-sm font-bold ${prediction > 0.5 ? 'text-red-600' : 'text-green-600'}`}>
+          <span className={`text-sm font-bold ${prediction > 0.5 ? 'text-destructive' : 'text-success'}`}>
             {(prediction * 100).toFixed(0)}% {prediction > 0.5 ? 'Lame' : 'Sound'}
           </span>
         </div>
         <div className="space-y-1">
           {sortedFeatures.slice(0, 3).map((feat, idx) => (
             <div key={idx} className="flex items-center gap-2 text-xs">
-              <span className={`w-2 h-2 rounded-full ${feat.shap_value > 0 ? 'bg-red-500' : 'bg-green-500'}`} />
+              <span className={`w-2 h-2 rounded-full ${feat.shap_value > 0 ? 'bg-destructive' : 'bg-success'}`} />
               <span className="flex-1 truncate" title={FEATURE_DESCRIPTIONS[feat.feature]}>
                 {feat.feature.replace(/_/g, ' ')}
               </span>
-              <span className={feat.shap_value > 0 ? 'text-red-600' : 'text-green-600'}>
+              <span className={feat.shap_value > 0 ? 'text-destructive' : 'text-success'}>
                 {feat.shap_value > 0 ? '+' : ''}{(feat.shap_value * 100).toFixed(1)}%
               </span>
             </div>
@@ -143,33 +143,33 @@ export default function ShapExplanation({ videoId, compact = false }: ShapExplan
         <h3 className="text-lg font-semibold">SHAP Explanation</h3>
         <div className="text-right">
           <div className="text-sm text-muted-foreground">Prediction</div>
-          <div className={`text-2xl font-bold ${prediction > 0.5 ? 'text-red-600' : 'text-green-600'}`}>
+          <div className={`text-2xl font-bold ${prediction > 0.5 ? 'text-destructive' : 'text-success'}`}>
             {(prediction * 100).toFixed(1)}% {prediction > 0.5 ? 'Lame' : 'Sound'}
           </div>
         </div>
       </div>
 
       {/* Force Plot Visualization */}
-      <div className="bg-gray-50 rounded-lg p-4">
+      <div className="bg-muted/50 rounded-lg p-4">
         <div className="text-sm text-muted-foreground mb-2">Force Plot</div>
         
         {/* Scale */}
         <div className="relative h-8 mb-2">
-          <div className="absolute inset-x-0 top-1/2 h-1 bg-gray-200 rounded" />
+          <div className="absolute inset-x-0 top-1/2 h-1 bg-muted-foreground/30 rounded" />
           
           {/* Base value marker */}
           <div 
-            className="absolute top-0 w-0.5 h-full bg-gray-400"
+            className="absolute top-0 w-0.5 h-full bg-muted-foreground/60"
             style={{ left: `${((base_value - minValue) / range) * 100}%` }}
           >
-            <div className="absolute -top-6 left-1/2 -translate-x-1/2 text-xs text-gray-500 whitespace-nowrap">
+            <div className="absolute -top-6 left-1/2 -translate-x-1/2 text-xs text-muted-foreground whitespace-nowrap">
               Base: {(base_value * 100).toFixed(0)}%
             </div>
           </div>
           
           {/* Prediction marker */}
           <div 
-            className="absolute top-0 w-1 h-full bg-black rounded"
+            className="absolute top-0 w-1 h-full bg-foreground rounded"
             style={{ left: `${((prediction - minValue) / range) * 100}%` }}
           >
             <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-xs font-bold whitespace-nowrap">
@@ -180,8 +180,8 @@ export default function ShapExplanation({ videoId, compact = false }: ShapExplan
 
         {/* Labels */}
         <div className="flex justify-between text-xs text-muted-foreground mt-8">
-          <span className="text-green-600">← Sound</span>
-          <span className="text-red-600">Lame →</span>
+          <span className="text-success">← Sound</span>
+          <span className="text-destructive">Lame →</span>
         </div>
       </div>
 
@@ -192,8 +192,8 @@ export default function ShapExplanation({ videoId, compact = false }: ShapExplan
         {/* Pushing toward Lame (positive) */}
         {positiveFeatures.length > 0 && (
           <div className="space-y-2">
-            <div className="text-xs text-red-600 font-medium flex items-center gap-2">
-              <span className="w-3 h-3 bg-red-500 rounded" />
+            <div className="text-xs text-destructive font-medium flex items-center gap-2">
+              <span className="w-3 h-3 bg-destructive rounded" />
               Pushing toward Lame
             </div>
             {positiveFeatures.map((feat, idx) => (
@@ -210,8 +210,8 @@ export default function ShapExplanation({ videoId, compact = false }: ShapExplan
         {/* Pushing toward Sound (negative) */}
         {negativeFeatures.length > 0 && (
           <div className="space-y-2">
-            <div className="text-xs text-green-600 font-medium flex items-center gap-2">
-              <span className="w-3 h-3 bg-green-500 rounded" />
+            <div className="text-xs text-success font-medium flex items-center gap-2">
+              <span className="w-3 h-3 bg-success rounded" />
               Pushing toward Sound
             </div>
             {negativeFeatures.map((feat, idx) => (
@@ -254,16 +254,16 @@ function FeatureBar({ feature, maxContribution, direction }: FeatureBarProps) {
         <div className="w-32 text-xs truncate" title={description}>
           {feature.feature.replace(/_/g, ' ')}
         </div>
-        <div className="flex-1 h-4 bg-gray-100 rounded overflow-hidden">
+        <div className="flex-1 h-4 bg-muted rounded overflow-hidden">
           <div
             className={`h-full rounded transition-all ${
-              direction === 'positive' ? 'bg-red-400' : 'bg-green-400'
+              direction === 'positive' ? 'bg-destructive/70' : 'bg-success/70'
             }`}
             style={{ width: `${percentage}%` }}
           />
         </div>
         <div className={`w-16 text-xs text-right font-medium ${
-          direction === 'positive' ? 'text-red-600' : 'text-green-600'
+          direction === 'positive' ? 'text-destructive' : 'text-success'
         }`}>
           {direction === 'positive' ? '+' : ''}{(feature.shap_value * 100).toFixed(1)}%
         </div>
@@ -272,9 +272,9 @@ function FeatureBar({ feature, maxContribution, direction }: FeatureBarProps) {
       {/* Tooltip */}
       {description && (
         <div className="absolute left-0 bottom-full mb-1 hidden group-hover:block z-10">
-          <div className="bg-gray-900 text-white text-xs rounded px-2 py-1 max-w-xs">
+          <div className="bg-popover text-popover-foreground text-xs rounded px-2 py-1 max-w-xs shadow-lg border border-border">
             <div className="font-medium mb-1">{feature.feature.replace(/_/g, ' ')}</div>
-            <div className="text-gray-300">{description}</div>
+            <div className="text-muted-foreground">{description}</div>
             <div className="mt-1">Value: {feature.value.toFixed(3)}</div>
           </div>
         </div>
