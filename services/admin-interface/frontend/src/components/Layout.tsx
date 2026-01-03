@@ -210,7 +210,7 @@ export default function Layout({ children }: LayoutProps) {
         ref={sidebarRef}
         className={cn(
           "fixed left-0 top-0 h-full z-50 transition-all duration-300 ease-out flex flex-col",
-          "glass-card border-r border-border/50",
+          "glass-card border-r border-border/50 !overflow-visible",
           isSidebarCollapsed ? "w-[72px]" : "w-64",
           // Mobile styles
           "lg:translate-x-0",
@@ -313,12 +313,15 @@ export default function Layout({ children }: LayoutProps) {
                   className="fixed inset-0 z-[60]"
                   onClick={() => setIsUserMenuOpen(false)}
                 />
-                <div className={cn(
-                  "absolute z-[61] bg-card rounded-xl shadow-xl border border-border/50 animate-scale-in overflow-hidden",
-                  isSidebarCollapsed 
-                    ? "left-full ml-2 bottom-0 w-72" 
-                    : "left-0 right-0 bottom-full mb-2"
-                )}>
+                <div 
+                  className={cn(
+                    "z-[61] bg-card rounded-xl shadow-xl border border-border/50 animate-scale-in overflow-hidden",
+                    isSidebarCollapsed 
+                      ? "fixed w-72" 
+                      : "absolute left-0 right-0 bottom-full mb-2"
+                  )}
+                  style={isSidebarCollapsed ? { left: '80px', bottom: '12px' } : undefined}
+                >
                   {/* User info header */}
                   <div className="p-4 bg-gradient-to-br from-primary/10 to-accent/10">
                     <div className="flex items-center gap-3">
@@ -478,9 +481,12 @@ export default function Layout({ children }: LayoutProps) {
                   className="flex-1 bg-transparent border-none outline-none text-foreground placeholder:text-muted-foreground"
                   autoFocus
                 />
-                <kbd className="hidden sm:inline-flex h-5 select-none items-center gap-1 rounded border border-border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground">
+                <button
+                  onClick={() => setIsSearchOpen(false)}
+                  className="hidden sm:inline-flex h-6 select-none items-center gap-1 rounded border border-border bg-muted px-2 font-mono text-[10px] font-medium text-muted-foreground hover:bg-accent hover:text-foreground transition-colors cursor-pointer"
+                >
                   ESC
-                </kbd>
+                </button>
               </div>
               <div className="p-2 max-h-80 overflow-y-auto">
                 {/* Quick links */}
