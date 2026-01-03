@@ -123,20 +123,21 @@ class CowReIDMatcher:
         # Normalize embedding
         embedding = embedding / (np.linalg.norm(embedding) + 1e-8)
 
-        # Search for similar embeddings
-        results = self.client.search(
+        # Search for similar embeddings using query_points API
+        response = self.client.query_points(
             collection_name=self.COLLECTION_NAME,
-            query_vector=embedding.tolist(),
-            limit=top_k
+            query=embedding.tolist(),
+            limit=top_k,
+            with_payload=True
         )
 
         candidates = []
-        for result in results:
-            confidence = self._score_to_confidence(result.score)
+        for point in response.points:
+            confidence = self._score_to_confidence(point.score)
             candidates.append(ReIDMatch(
-                identity_id=UUID(result.payload["identity_id"]),
-                cow_id=result.payload["cow_id"],
-                similarity=result.score,
+                identity_id=UUID(point.payload["identity_id"]),
+                cow_id=point.payload["cow_id"],
+                similarity=point.score,
                 confidence=confidence
             ))
 

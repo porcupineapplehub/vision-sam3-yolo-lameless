@@ -161,13 +161,15 @@ def associate_detections_to_tracks(
     # Filter matches below IoU threshold
     valid_matches = []
     for m in matched:
-        if iou_matrix[m[0], m[1]] >= iou_threshold:
-            valid_matches.append(m)
+        if iou_matrix[int(m[0]), int(m[1])] >= iou_threshold:
+            valid_matches.append([int(m[0]), int(m[1])])
         else:
-            unmatched_detections = np.append(unmatched_detections, m[0])
-            unmatched_tracks = np.append(unmatched_tracks, m[1])
+            unmatched_detections = np.append(unmatched_detections, int(m[0]))
+            unmatched_tracks = np.append(unmatched_tracks, int(m[1]))
 
-    matched = np.array(valid_matches) if valid_matches else np.empty((0, 2), dtype=int)
+    matched = np.array(valid_matches, dtype=int) if valid_matches else np.empty((0, 2), dtype=int)
+    unmatched_detections = unmatched_detections.astype(int)
+    unmatched_tracks = unmatched_tracks.astype(int)
 
     return matched, unmatched_detections, unmatched_tracks
 

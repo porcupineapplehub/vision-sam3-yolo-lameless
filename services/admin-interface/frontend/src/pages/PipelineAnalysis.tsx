@@ -229,90 +229,152 @@ export default function PipelineAnalysis() {
     return colors[color]?.[type] || 'bg-gray-100'
   }
 
+  // Count pipeline statuses for stats bar
+  const pipelineKeys = ['yolo', 'sam3', 'dinov3', 'tleap', 'tcn', 'transformer', 'gnn', 'graph_transformer', 'ml', 'fusion']
+  const successCount = pipelineKeys.filter(k => results[k]?.status === 'success').length
+  const errorCount = pipelineKeys.filter(k => results[k]?.status === 'error').length
+  const pendingCount = pipelineKeys.filter(k => results[k]?.status === 'pending').length
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
-        <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
-        <span className="ml-2 text-gray-600">Loading analysis data...</span>
+        <div className="text-center">
+          <Loader2 className="w-12 h-12 animate-spin text-blue-600 mx-auto mb-4" />
+          <p className="text-gray-600 font-medium">Analyzing video pipelines...</p>
+          <p className="text-sm text-gray-400 mt-1">Loading results from all ML models</p>
+        </div>
       </div>
     )
   }
 
   if (error) {
     return (
-      <div className="p-6 text-center">
-        <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
-        <p className="text-red-600">{error}</p>
-        <button
-          onClick={() => navigate(-1)}
-          className="mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-        >
-          Go Back
-        </button>
+      <div className="flex items-center justify-center h-96">
+        <div className="text-center p-8 bg-red-50 rounded-2xl border-2 border-red-200 max-w-md">
+          <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
+          <h2 className="text-xl font-bold text-red-800 mb-2">Analysis Failed</h2>
+          <p className="text-red-600 mb-6">{error}</p>
+          <button
+            onClick={() => navigate(-1)}
+            className="px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-all font-medium"
+          >
+            Go Back
+          </button>
+        </div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-white border-b sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-4 py-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
+    <div className="space-y-6">
+      {/* Header - Pipeline Monitor style */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <button
+            onClick={() => navigate(-1)}
+            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Pipeline Analysis</h1>
+            <p className="text-sm text-gray-500">
+              Deep dive into ML pipeline results for video <span className="font-mono text-gray-700">{videoId?.substring(0, 8)}...</span>
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-4">
+          {/* Live Status Indicator */}
+          <div className="flex items-center gap-2 text-sm">
+            <div className={`w-2 h-2 rounded-full ${successCount > 0 ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`} />
+            <span className="text-gray-500">
+              {successCount}/{pipelineKeys.length} pipelines
+            </span>
+          </div>
+          <button
+            onClick={loadAllData}
+            className="flex items-center gap-2 px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm transition-colors"
+          >
+            <RefreshCw className="h-4 w-4" />
+            Refresh
+          </button>
+          <div className="relative group">
+            <button className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium">
+              <Download className="w-4 h-4" />
+              Export
+            </button>
+            <div className="absolute right-0 mt-2 w-44 bg-white rounded-lg shadow-xl border hidden group-hover:block z-20">
               <button
-                onClick={() => navigate(-1)}
-                className="p-2 hover:bg-gray-100 rounded-full"
+                onClick={() => handleExport('json')}
+                className="w-full px-4 py-3 text-left hover:bg-gray-50 flex items-center gap-3 rounded-t-lg transition-colors"
               >
-                <ArrowLeft className="w-5 h-5" />
+                <FileJson className="w-4 h-4 text-blue-600" />
+                <span className="font-medium">Export JSON</span>
               </button>
-              <div>
-                <h1 className="text-xl font-semibold">Pipeline Analysis</h1>
-                <p className="text-sm text-gray-500 font-mono">{videoId}</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
               <button
-                onClick={loadAllData}
-                className="p-2 hover:bg-gray-100 rounded-full"
-                title="Refresh"
+                onClick={() => handleExport('csv')}
+                className="w-full px-4 py-3 text-left hover:bg-gray-50 flex items-center gap-3 rounded-b-lg transition-colors border-t"
               >
-                <RefreshCw className="w-5 h-5" />
+                <FileText className="w-4 h-4 text-green-600" />
+                <span className="font-medium">Export CSV</span>
               </button>
-              <div className="relative group">
-                <button className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600">
-                  <Download className="w-4 h-4" />
-                  Export
-                </button>
-                <div className="absolute right-0 mt-1 w-40 bg-white rounded-lg shadow-lg border hidden group-hover:block">
-                  <button
-                    onClick={() => handleExport('json')}
-                    className="w-full px-4 py-2 text-left hover:bg-gray-100 flex items-center gap-2"
-                  >
-                    <FileJson className="w-4 h-4" />
-                    Export JSON
-                  </button>
-                  <button
-                    onClick={() => handleExport('csv')}
-                    className="w-full px-4 py-2 text-left hover:bg-gray-100 flex items-center gap-2"
-                  >
-                    <FileText className="w-4 h-4" />
-                    Export CSV
-                  </button>
-                </div>
-              </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 py-6">
-        <div className="grid grid-cols-12 gap-6">
-          {/* Video Player Section */}
-          <div className="col-span-5">
-            <div className="bg-white rounded-lg shadow p-4">
-              <div className="relative bg-black rounded-lg overflow-hidden aspect-video">
+      {/* Stats Summary Bar - Pipeline Monitor style */}
+      <div className="grid grid-cols-4 gap-4">
+        <div className="bg-white p-4 rounded-lg border-2 border-green-200 hover:border-green-300 transition-colors">
+          <div className="flex items-center gap-2 text-green-600 mb-1">
+            <CheckCircle className="h-4 w-4" />
+            <span className="text-sm font-medium">Completed</span>
+          </div>
+          <p className="text-2xl font-bold text-green-700">{successCount}</p>
+        </div>
+        <div className="bg-white p-4 rounded-lg border-2 border-red-200 hover:border-red-300 transition-colors">
+          <div className="flex items-center gap-2 text-red-600 mb-1">
+            <XCircle className="h-4 w-4" />
+            <span className="text-sm font-medium">Errors</span>
+          </div>
+          <p className="text-2xl font-bold text-red-700">{errorCount}</p>
+        </div>
+        <div className="bg-white p-4 rounded-lg border-2 border-yellow-200 hover:border-yellow-300 transition-colors">
+          <div className="flex items-center gap-2 text-yellow-600 mb-1">
+            <Loader2 className="h-4 w-4" />
+            <span className="text-sm font-medium">Pending</span>
+          </div>
+          <p className="text-2xl font-bold text-yellow-700">{pendingCount}</p>
+        </div>
+        <div className="bg-white p-4 rounded-lg border-2 border-blue-200 hover:border-blue-300 transition-colors">
+          <div className="flex items-center gap-2 text-blue-600 mb-1">
+            <Activity className="h-4 w-4" />
+            <span className="text-sm font-medium">Final Score</span>
+          </div>
+          <p className="text-2xl font-bold text-blue-700">
+            {results.fusion?.data?.fusion_result?.final_probability
+              ? `${(results.fusion.data.fusion_result.final_probability * 100).toFixed(0)}%`
+              : '-'}
+          </p>
+        </div>
+      </div>
+
+      {/* Main Content Grid */}
+      <div className="grid grid-cols-12 gap-6">
+        {/* Video Player Section */}
+        <div className="col-span-5 space-y-4">
+          <div className="bg-white rounded-lg border-2 border-gray-200 hover:border-gray-300 transition-colors overflow-hidden">
+            {/* Video Header */}
+            <div className="px-4 py-3 border-b bg-gray-50 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Box className="w-4 h-4 text-gray-500" />
+                <span className="font-medium text-sm">Video Preview</span>
+              </div>
+              <span className="text-xs text-gray-500 font-mono">{videoInfo?.fps || 30} fps</span>
+            </div>
+
+            <div className="p-4">
+              <div className="relative bg-gray-900 rounded-lg overflow-hidden aspect-video">
                 <video
                   ref={videoRef}
                   src={videosApi.getStreamUrl(videoId!)}
@@ -322,90 +384,109 @@ export default function PipelineAnalysis() {
                 />
                 {/* Overlay indicators */}
                 {overlays.detections && frameData?.detections?.length > 0 && (
-                  <div className="absolute top-2 left-2 bg-yellow-500 text-white text-xs px-2 py-1 rounded">
+                  <div className="absolute top-2 left-2 bg-yellow-500/90 text-white text-xs px-2 py-1 rounded-full font-medium">
                     {frameData.detections.length} detections
                   </div>
                 )}
+                {/* Frame badge */}
+                <div className="absolute bottom-2 right-2 bg-black/70 text-white text-xs px-2 py-1 rounded font-mono">
+                  {currentFrame} / {totalFrames}
+                </div>
               </div>
 
               {/* Video Controls */}
               <div className="mt-4 space-y-3">
-                <div className="flex items-center justify-center gap-4">
-                  <button onClick={() => stepFrame(-10)} className="p-2 hover:bg-gray-100 rounded">
-                    <SkipBack className="w-5 h-5" />
+                <div className="flex items-center justify-center gap-2">
+                  <button onClick={() => stepFrame(-10)} className="p-2 hover:bg-gray-100 rounded-lg transition-colors" title="Back 10 frames">
+                    <SkipBack className="w-4 h-4" />
                   </button>
-                  <button onClick={() => stepFrame(-1)} className="p-2 hover:bg-gray-100 rounded">
-                    <ChevronLeft className="w-5 h-5" />
+                  <button onClick={() => stepFrame(-1)} className="p-2 hover:bg-gray-100 rounded-lg transition-colors" title="Back 1 frame">
+                    <ChevronLeft className="w-4 h-4" />
                   </button>
                   <button
                     onClick={togglePlay}
-                    className="p-3 bg-blue-500 text-white rounded-full hover:bg-blue-600"
+                    className="p-3 bg-blue-600 text-white rounded-full hover:bg-blue-700 transition-all shadow-lg hover:shadow-xl"
                   >
-                    {isPlaying ? <Pause className="w-6 h-6" /> : <Play className="w-6 h-6" />}
+                    {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5 ml-0.5" />}
                   </button>
-                  <button onClick={() => stepFrame(1)} className="p-2 hover:bg-gray-100 rounded">
-                    <ChevronRight className="w-5 h-5" />
+                  <button onClick={() => stepFrame(1)} className="p-2 hover:bg-gray-100 rounded-lg transition-colors" title="Forward 1 frame">
+                    <ChevronRight className="w-4 h-4" />
                   </button>
-                  <button onClick={() => stepFrame(10)} className="p-2 hover:bg-gray-100 rounded">
-                    <SkipForward className="w-5 h-5" />
+                  <button onClick={() => stepFrame(10)} className="p-2 hover:bg-gray-100 rounded-lg transition-colors" title="Forward 10 frames">
+                    <SkipForward className="w-4 h-4" />
                   </button>
                 </div>
 
                 {/* Frame Scrubber */}
-                <div className="space-y-1">
+                <div className="space-y-1 px-1">
                   <input
                     type="range"
                     min={0}
                     max={totalFrames - 1}
                     value={currentFrame}
                     onChange={(e) => seekToFrame(parseInt(e.target.value))}
-                    className="w-full"
+                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
                   />
-                  <div className="flex justify-between text-xs text-gray-500">
-                    <span>Frame {currentFrame}</span>
-                    <span>{totalFrames} total</span>
-                  </div>
                 </div>
 
                 {/* Overlay Toggles */}
-                <div className="flex items-center gap-4 text-sm">
-                  <label className="flex items-center gap-2 cursor-pointer">
+                <div className="flex items-center justify-center gap-4 text-sm">
+                  <label className="flex items-center gap-2 cursor-pointer hover:text-blue-600 transition-colors">
                     <input
                       type="checkbox"
                       checked={overlays.detections}
                       onChange={(e) => setOverlays({ ...overlays, detections: e.target.checked })}
-                      className="rounded"
+                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                     />
-                    Detections
+                    <span>Detections</span>
                   </label>
-                  <label className="flex items-center gap-2 cursor-pointer">
+                  <label className="flex items-center gap-2 cursor-pointer hover:text-orange-600 transition-colors">
                     <input
                       type="checkbox"
                       checked={overlays.pose}
                       onChange={(e) => setOverlays({ ...overlays, pose: e.target.checked })}
-                      className="rounded"
+                      className="rounded border-gray-300 text-orange-600 focus:ring-orange-500"
                     />
-                    Pose
+                    <span>Pose</span>
                   </label>
-                  <label className="flex items-center gap-2 cursor-pointer">
+                  <label className="flex items-center gap-2 cursor-pointer hover:text-purple-600 transition-colors">
                     <input
                       type="checkbox"
                       checked={overlays.segmentation}
                       onChange={(e) => setOverlays({ ...overlays, segmentation: e.target.checked })}
-                      className="rounded"
+                      className="rounded border-gray-300 text-purple-600 focus:ring-purple-500"
                     />
-                    Mask
+                    <span>Mask</span>
                   </label>
                 </div>
               </div>
             </div>
+          </div>
 
-            {/* Final Prediction Card */}
-            {results.fusion?.status === 'success' && results.fusion.data && (
-              <div className="mt-4 bg-white rounded-lg shadow p-4">
-                <h3 className="font-semibold mb-3">Final Prediction</h3>
+          {/* Final Prediction Card */}
+          {results.fusion?.status === 'success' && results.fusion.data && (
+            <div className={`rounded-lg border-2 overflow-hidden transition-all ${
+              results.fusion.data.fusion_result?.final_prediction === 1
+                ? 'border-red-300 bg-gradient-to-br from-red-50 to-red-100/50'
+                : 'border-green-300 bg-gradient-to-br from-green-50 to-green-100/50'
+            }`}>
+              <div className={`px-4 py-2 border-b ${
+                results.fusion.data.fusion_result?.final_prediction === 1
+                  ? 'bg-red-100/80 border-red-200'
+                  : 'bg-green-100/80 border-green-200'
+              }`}>
+                <h3 className={`font-semibold text-sm flex items-center gap-2 ${
+                  results.fusion.data.fusion_result?.final_prediction === 1
+                    ? 'text-red-800'
+                    : 'text-green-800'
+                }`}>
+                  <TrendingUp className="w-4 h-4" />
+                  Final Prediction
+                </h3>
+              </div>
+              <div className="p-4">
                 <div className="flex items-center justify-between">
-                  <div className={`text-2xl font-bold ${
+                  <div className={`text-3xl font-bold ${
                     results.fusion.data.fusion_result?.final_prediction === 1
                       ? 'text-red-600'
                       : 'text-green-600'
@@ -413,35 +494,49 @@ export default function PipelineAnalysis() {
                     {results.fusion.data.fusion_result?.final_prediction === 1 ? 'LAME' : 'HEALTHY'}
                   </div>
                   <div className="text-right">
-                    <div className="text-lg font-semibold">
+                    <div className={`text-2xl font-bold ${
+                      results.fusion.data.fusion_result?.final_prediction === 1
+                        ? 'text-red-600'
+                        : 'text-green-600'
+                    }`}>
                       {((results.fusion.data.fusion_result?.final_probability || 0) * 100).toFixed(1)}%
                     </div>
-                    <div className="text-sm text-gray-500">
-                      Confidence: {((results.fusion.data.fusion_result?.confidence || 0) * 100).toFixed(0)}%
+                    <div className="text-sm text-gray-600">
+                      Confidence: <span className="font-medium">{((results.fusion.data.fusion_result?.confidence || 0) * 100).toFixed(0)}%</span>
                     </div>
                   </div>
                 </div>
-                <div className="mt-3 h-2 bg-gray-200 rounded-full overflow-hidden">
+                <div className="mt-3 h-3 bg-white/80 rounded-full overflow-hidden border">
                   <div
-                    className={`h-full transition-all ${
+                    className={`h-full transition-all duration-500 ${
                       results.fusion.data.fusion_result?.final_prediction === 1
-                        ? 'bg-red-500'
-                        : 'bg-green-500'
+                        ? 'bg-gradient-to-r from-red-400 to-red-500'
+                        : 'bg-gradient-to-r from-green-400 to-green-500'
                     }`}
                     style={{ width: `${(results.fusion.data.fusion_result?.final_probability || 0) * 100}%` }}
                   />
                 </div>
               </div>
-            )}
-          </div>
+            </div>
+          )}
+        </div>
 
-          {/* Pipeline Tabs Section */}
-          <div className="col-span-7">
-            <div className="bg-white rounded-lg shadow">
-              {/* Tab Navigation - Compact Icon Grid */}
-              <div className="border-b p-3">
-                <div className="flex items-center gap-3">
-                  {/* Current Tab Label */}
+        {/* Pipeline Tabs Section */}
+        <div className="col-span-7">
+          <div className="bg-white rounded-lg border-2 border-gray-200 hover:border-gray-300 transition-colors overflow-hidden">
+            {/* Tab Header */}
+            <div className="px-4 py-3 border-b bg-gradient-to-r from-gray-50 to-white flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Cpu className="w-4 h-4 text-blue-600" />
+                <span className="font-medium text-sm">Pipeline Results</span>
+              </div>
+              <span className="text-xs text-gray-500">{successCount} of {pipelineKeys.length} complete</span>
+            </div>
+
+            {/* Tab Navigation - Compact Icon Grid */}
+            <div className="border-b p-3 bg-gray-50/50">
+              <div className="flex items-center gap-3">
+                {/* Current Tab Label */}
                   <div className="flex items-center gap-2 min-w-0">
                     {(() => {
                       const config = PIPELINE_CONFIG[activeTab]
@@ -576,6 +671,27 @@ function SummaryTab({ results, onTabChange }: { results: AllResults; onTabChange
     }
   }
 
+  const getStatusBorderColor = (status: string, color: string) => {
+    if (status === 'success') {
+      const borderColors: Record<string, string> = {
+        yellow: 'border-yellow-300',
+        purple: 'border-purple-300',
+        green: 'border-green-300',
+        orange: 'border-orange-300',
+        cyan: 'border-cyan-300',
+        pink: 'border-pink-300',
+        indigo: 'border-indigo-300',
+        amber: 'border-amber-300',
+        red: 'border-red-300',
+        emerald: 'border-emerald-300',
+      }
+      return borderColors[color] || 'border-gray-300'
+    }
+    if (status === 'error') return 'border-red-300'
+    if (status === 'pending') return 'border-yellow-300'
+    return 'border-gray-200'
+  }
+
   const successCount = pipelines.filter(p => results[p]?.status === 'success').length
   const agreementPercent = (successCount / pipelines.length * 100).toFixed(0)
 
@@ -583,8 +699,12 @@ function SummaryTab({ results, onTabChange }: { results: AllResults; onTabChange
     <div className="space-y-6">
       {/* Pipeline Grid */}
       <div>
-        <h3 className="text-lg font-semibold mb-4">Pipeline Results</h3>
-        <p className="text-sm text-gray-500 mb-3">Click on any pipeline card to view detailed results</p>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold">Pipeline Results</h3>
+          <span className="text-sm text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
+            Click to explore →
+          </span>
+        </div>
         <div className="grid grid-cols-5 gap-3">
           {pipelines.map((key) => {
             const config = PIPELINE_CONFIG[key as PipelineKey]
@@ -596,22 +716,37 @@ function SummaryTab({ results, onTabChange }: { results: AllResults; onTabChange
               <button
                 key={key}
                 onClick={() => onTabChange(key as PipelineKey)}
-                className={`p-3 rounded-lg border text-left transition-all hover:shadow-md hover:scale-[1.02] active:scale-[0.98] ${
+                className={`p-3 rounded-lg border-2 text-left transition-all duration-200 hover:shadow-lg hover:scale-[1.03] active:scale-[0.98] group ${
                   result?.status === 'success'
-                    ? `${getColorClass(config.color, 'bg')} hover:ring-2 hover:ring-offset-1 hover:ring-${config.color}-300`
-                    : 'bg-gray-50 hover:bg-gray-100'
+                    ? `${getColorClass(config.color, 'bg')} ${getStatusBorderColor(result.status, config.color)} hover:shadow-${config.color}-200`
+                    : result?.status === 'error'
+                    ? 'bg-red-50 border-red-300'
+                    : result?.status === 'pending'
+                    ? 'bg-yellow-50 border-yellow-300'
+                    : 'bg-gray-50 border-gray-200 hover:bg-gray-100 hover:border-gray-300'
                 }`}
               >
                 <div className="flex items-center justify-between mb-2">
-                  <Icon className={`w-4 h-4 ${getColorClass(config.color, 'text')}`} />
+                  <div className={`p-1.5 rounded-lg ${getColorClass(config.color, 'bg')} group-hover:scale-110 transition-transform`}>
+                    <Icon className={`w-4 h-4 ${getColorClass(config.color, 'text')}`} />
+                  </div>
                   {result && <StatusIcon status={result.status} />}
                 </div>
-                <div className="text-sm font-medium">{config.name}</div>
+                <div className="text-sm font-semibold text-gray-800">{config.name}</div>
                 {result?.status === 'success' && (
-                  <div className="mt-1">
-                    <span className="text-lg font-bold">{metric.value}</span>
+                  <div className="mt-2">
+                    <span className="text-xl font-bold text-gray-900">{metric.value}</span>
                     <span className="text-xs text-gray-500 ml-1">{metric.label}</span>
                   </div>
+                )}
+                {result?.status === 'error' && (
+                  <div className="mt-2 text-xs text-red-600 font-medium">Error</div>
+                )}
+                {result?.status === 'pending' && (
+                  <div className="mt-2 text-xs text-yellow-600 font-medium">Processing...</div>
+                )}
+                {!result && (
+                  <div className="mt-2 text-xs text-gray-400">Not available</div>
                 )}
               </button>
             )
@@ -619,25 +754,37 @@ function SummaryTab({ results, onTabChange }: { results: AllResults; onTabChange
         </div>
       </div>
 
-      {/* Model Agreement */}
-      <div>
-        <h3 className="text-lg font-semibold mb-3">Pipeline Status</h3>
-        <div className="flex items-center gap-4">
-          <div className="flex-1 h-4 bg-gray-200 rounded-full overflow-hidden">
-            <div
-              className="h-full bg-green-500 transition-all"
-              style={{ width: `${agreementPercent}%` }}
-            />
-          </div>
-          <span className="text-sm font-medium">{successCount}/{pipelines.length} completed</span>
+      {/* Model Agreement Progress */}
+      <div className="bg-gray-50 rounded-lg p-4 border">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="font-semibold text-gray-700">Processing Progress</h3>
+          <span className="text-sm font-medium text-gray-600">{successCount}/{pipelines.length} completed</span>
+        </div>
+        <div className="h-3 bg-gray-200 rounded-full overflow-hidden">
+          <div
+            className="h-full bg-gradient-to-r from-green-400 to-green-500 transition-all duration-500 rounded-full"
+            style={{ width: `${agreementPercent}%` }}
+          />
+        </div>
+        <div className="flex justify-between mt-2 text-xs text-gray-500">
+          <span>0%</span>
+          <span className="font-medium text-green-600">{agreementPercent}% complete</span>
+          <span>100%</span>
         </div>
       </div>
 
       {/* Recommendation */}
       {results.fusion?.data?.fusion_result?.recommendation && (
-        <div className="p-4 bg-blue-50 rounded-lg">
-          <h4 className="font-medium text-blue-800 mb-2">Recommendation</h4>
-          <p className="text-blue-700">{results.fusion.data.fusion_result.recommendation}</p>
+        <div className="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200">
+          <div className="flex items-start gap-3">
+            <div className="p-2 bg-blue-100 rounded-lg">
+              <Info className="w-4 h-4 text-blue-600" />
+            </div>
+            <div>
+              <h4 className="font-semibold text-blue-800 mb-1">Recommendation</h4>
+              <p className="text-blue-700 text-sm">{results.fusion.data.fusion_result.recommendation}</p>
+            </div>
+          </div>
         </div>
       )}
     </div>

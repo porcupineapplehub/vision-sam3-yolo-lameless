@@ -27,6 +27,7 @@ nats:
     hitl_comparison_requested: "hitl.comparison.requested"
     hitl_comparison_submitted: "hitl.comparison.submitted"
     rater_reliability_updated: "rater.reliability.updated"
+    cow_prediction_updated: "cow.prediction.updated"
 
 database:
   url: postgresql://lameness_user:lameness_pass@postgres:5432/lameness_db

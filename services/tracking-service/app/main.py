@@ -239,12 +239,18 @@ class TrackingService:
 
         # Handle different YOLO result formats
         if "detections" in yolo_data:
-            # Flat list of detections with frame info
-            for det in yolo_data["detections"]:
-                frame = det.get("frame", 0)
+            for item in yolo_data["detections"]:
+                frame = item.get("frame", 0)
                 if frame not in detections_by_frame:
                     detections_by_frame[frame] = []
-                detections_by_frame[frame].append(det)
+                
+                # Check if this is a frame container with nested detections
+                if "detections" in item and isinstance(item["detections"], list):
+                    # Format: {"frame": 0, "detections": [{"bbox": [...], ...}]}
+                    detections_by_frame[frame].extend(item["detections"])
+                elif "bbox" in item:
+                    # Flat format: {"frame": 0, "bbox": [...], ...}
+                    detections_by_frame[frame].append(item)
 
         elif "frames" in yolo_data:
             # Nested by frame
@@ -281,7 +287,21 @@ class TrackingService:
                 if results_file.exists():
                     with open(results_file) as f:
                         dinov3_data = json.load(f)
-                    embedding = np.array(dinov3_data.get("embedding", []))
+                    
+                    # Try different embedding formats
+                    if "embedding" in dinov3_data:
+                        embedding = np.array(dinov3_data["embedding"])
+                    elif "canonical_frames" in dinov3_data and dinov3_data["canonical_frames"]:
+                        # Average embeddings from canonical frames
+                        frame_embeddings = [
+                            np.array(frame["embedding"]) 
+                            for frame in dinov3_data["canonical_frames"]
+                            if "embedding" in frame
+                        ]
+                        if frame_embeddings:
+                            embedding = np.mean(frame_embeddings, axis=0)
+                    elif "video_embedding" in dinov3_data:
+                        embedding = np.array(dinov3_data["video_embedding"])
 
             if embedding is None or len(embedding) == 0:
                 print(f"  No embedding found for {video_id}")

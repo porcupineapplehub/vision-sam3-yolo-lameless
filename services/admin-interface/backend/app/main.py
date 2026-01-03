@@ -11,7 +11,7 @@ import os
 import traceback
 import logging
 
-from app.routers import videos, analysis, training, models, shap
+from app.routers import videos, analysis, training, models, shap, cows
 from app.routers import auth, pipeline, health, ml_config, elo_ranking, tutorial
 from app.database import init_db, close_db
 from app.websocket.handler import ws_manager, websocket_endpoint
@@ -74,6 +74,7 @@ app.include_router(health.router, prefix="/api/health", tags=["health"])
 app.include_router(ml_config.router, prefix="/api/ml-config", tags=["ml-config"])
 app.include_router(elo_ranking.router, prefix="/api/elo", tags=["elo-ranking"])
 app.include_router(tutorial.router, prefix="/api/tutorial", tags=["tutorial"])
+app.include_router(cows.router, prefix="/api/cows", tags=["cows"])
 
 
 # ============== WEBSOCKET ENDPOINTS ==============

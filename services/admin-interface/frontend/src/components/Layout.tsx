@@ -27,7 +27,8 @@ import {
   Users,
   BookOpen,
   Menu,
-  Microscope
+  Microscope,
+  Beef
 } from 'lucide-react'
 
 interface LayoutProps {
@@ -51,6 +52,7 @@ export default function Layout({ children }: LayoutProps) {
   const navItems = [
     { path: '/', label: 'Dashboard', icon: Home, roles: ['admin', 'researcher', 'rater'] },
     { path: '/upload', label: 'Upload', icon: Upload, roles: ['admin', 'researcher'] },
+    { path: '/cows', label: 'Cow Registry', icon: Beef, roles: ['admin', 'researcher', 'rater'] },
     { path: '/pairwise', label: 'Pairwise', icon: GitCompare, roles: ['admin', 'researcher', 'rater'] },
     { path: '/triplet', label: 'Triplet', icon: Triangle, roles: ['admin', 'researcher', 'rater'] },
     { path: '/hierarchy', label: 'Hierarchy', icon: Network, roles: ['admin', 'researcher', 'rater'] },

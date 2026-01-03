@@ -20,6 +20,8 @@ import MLConfiguration from './pages/MLConfiguration'
 import UserManagement from './pages/UserManagement'
 import TutorialManagement from './pages/TutorialManagement'
 import Settings from './pages/Settings'
+import CowList from './pages/CowList'
+import CowDetail from './pages/CowDetail'
 
 function App() {
   return (
@@ -68,6 +70,10 @@ function App() {
                   <Route path="/hierarchy" element={<HierarchyVisualization />} />
                   <Route path="/similarity" element={<SimilarityMap />} />
                   <Route path="/learn" element={<TrainingModule />} />
+
+                  {/* Cow Registry - all authenticated users */}
+                  <Route path="/cows" element={<CowList />} />
+                  <Route path="/cows/:cowId" element={<CowDetail />} />
 
                   {/* Settings - all authenticated users */}
                   <Route path="/settings" element={<Settings />} />

@@ -267,6 +267,10 @@ class GraphormerGraphBuilder:
 
     Similar to GNN pipeline's GraphBuilder but with additional fields
     for Graphormer's encodings.
+    
+    Features:
+    - kNN edges based on embedding similarity
+    - Temporal edges connecting videos chronologically (when timestamps provided)
     """
 
     def __init__(self, k_neighbors: int = 5):
@@ -280,29 +284,58 @@ class GraphormerGraphBuilder:
         labels: Optional[torch.Tensor] = None
     ) -> Data:
         """
-        Build graph for Graphormer.
+        Build graph for Graphormer with kNN and temporal edges.
 
         Args:
             node_features: (N, D) node features
             embeddings: (N, E) embeddings for kNN
-            timestamps: (N,) optional timestamps
+            timestamps: (N,) optional timestamps for temporal edge construction
             labels: (N,) optional labels
 
         Returns:
-            PyG Data object
+            PyG Data object with:
+            - x: node features
+            - edge_index: combined kNN and temporal edges
+            - edge_attr: [weight, is_knn, is_temporal]
+            - timestamps: if provided
         """
         import numpy as np
 
         N = node_features.size(0)
 
         # Compute kNN edges
-        edge_index, edge_weights = self._compute_knn_edges(embeddings.numpy())
-
-        # Create edge attributes [weight, is_knn, is_temporal]
-        num_edges = edge_index.shape[1]
-        edge_attr = torch.zeros(num_edges, 3)
-        edge_attr[:, 0] = torch.tensor(edge_weights)  # Similarity weight
-        edge_attr[:, 1] = 1.0  # All are kNN edges
+        knn_edge_index, knn_edge_weights = self._compute_knn_edges(embeddings.numpy())
+        
+        # Compute temporal edges if timestamps provided
+        if timestamps is not None and len(timestamps) > 1:
+            temp_edge_index, temp_edge_weights = self._compute_temporal_edges(timestamps.numpy())
+        else:
+            temp_edge_index = np.array([[], []], dtype=np.int64)
+            temp_edge_weights = np.array([], dtype=np.float32)
+        
+        # Combine edges
+        if temp_edge_index.shape[1] > 0:
+            edge_index = np.concatenate([knn_edge_index, temp_edge_index], axis=1)
+            
+            # Create edge attributes [weight, is_knn, is_temporal]
+            num_knn = knn_edge_index.shape[1]
+            num_temp = temp_edge_index.shape[1]
+            
+            edge_attr = torch.zeros(num_knn + num_temp, 3)
+            # kNN edges
+            edge_attr[:num_knn, 0] = torch.tensor(knn_edge_weights)  # Similarity weight
+            edge_attr[:num_knn, 1] = 1.0  # is_knn = True
+            edge_attr[:num_knn, 2] = 0.0  # is_temporal = False
+            # Temporal edges
+            edge_attr[num_knn:, 0] = torch.tensor(temp_edge_weights)  # Temporal weight
+            edge_attr[num_knn:, 1] = 0.0  # is_knn = False
+            edge_attr[num_knn:, 2] = 1.0  # is_temporal = True
+        else:
+            edge_index = knn_edge_index
+            num_edges = edge_index.shape[1]
+            edge_attr = torch.zeros(num_edges, 3)
+            edge_attr[:, 0] = torch.tensor(knn_edge_weights)
+            edge_attr[:, 1] = 1.0  # All are kNN edges
 
         # Create Data object
         data = Data(
@@ -352,4 +385,54 @@ class GraphormerGraphBuilder:
         edge_index = np.array([edges_src, edges_dst], dtype=np.int64)
         edge_weights = np.array(edge_weights, dtype=np.float32)
 
+        return edge_index, edge_weights
+    
+    def _compute_temporal_edges(self, timestamps: 'np.ndarray'):
+        """
+        Compute temporal edges connecting videos chronologically.
+        
+        Creates bidirectional edges between consecutive videos (sorted by time).
+        Edge weight is based on time proximity (closer in time = higher weight).
+        
+        Args:
+            timestamps: (N,) array of timestamps
+            
+        Returns:
+            edge_index: (2, E) temporal edge indices
+            edge_weights: (E,) temporal proximity weights
+        """
+        import numpy as np
+        
+        N = len(timestamps)
+        if N < 2:
+            return np.array([[], []], dtype=np.int64), np.array([], dtype=np.float32)
+        
+        # Sort indices by timestamp
+        sorted_indices = np.argsort(timestamps)
+        
+        edges_src = []
+        edges_dst = []
+        edge_weights = []
+        
+        # Connect consecutive videos in time
+        for i in range(len(sorted_indices) - 1):
+            src_idx = sorted_indices[i]
+            dst_idx = sorted_indices[i + 1]
+            
+            # Compute time difference (in seconds)
+            time_diff = abs(timestamps[dst_idx] - timestamps[src_idx])
+            
+            # Weight: higher for closer videos, using exponential decay
+            # Weight = exp(-time_diff / tau) where tau = 1 day in seconds
+            tau = 86400.0  # 1 day
+            weight = np.exp(-time_diff / tau)
+            
+            # Bidirectional edges
+            edges_src.extend([src_idx, dst_idx])
+            edges_dst.extend([dst_idx, src_idx])
+            edge_weights.extend([weight, weight])
+        
+        edge_index = np.array([edges_src, edges_dst], dtype=np.int64)
+        edge_weights = np.array(edge_weights, dtype=np.float32)
+        
         return edge_index, edge_weights

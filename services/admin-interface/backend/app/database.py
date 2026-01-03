@@ -217,6 +217,78 @@ class HierarchySnapshot(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
+# ============== COW IDENTITY MODELS ==============
+
+class CowIdentity(Base):
+    """
+    Persistent cow identity record.
+    Stores metadata about known cows from Re-ID tracking.
+    """
+    __tablename__ = "cow_identities"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    cow_id = Column(String(100), unique=True, nullable=False, index=True)
+    tag_number = Column(String(50), nullable=True)
+    total_sightings = Column(Integer, default=0)
+    first_seen = Column(DateTime, default=datetime.utcnow)
+    last_seen = Column(DateTime, default=datetime.utcnow)
+    embedding_version = Column(String(20), default="dinov3-base")
+    notes = Column(Text, nullable=True)
+    is_active = Column(Boolean, default=True)
+
+
+class TrackHistory(Base):
+    """
+    Track record for a cow in a specific video.
+    Links tracks detected in videos to their corresponding cow identities.
+    """
+    __tablename__ = "track_history"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    video_id = Column(String(100), nullable=False, index=True)
+    track_id = Column(Integer, nullable=False)
+    cow_id = Column(UUID(as_uuid=True), ForeignKey("cow_identities.id"), nullable=True, index=True)
+    reid_confidence = Column(Float, nullable=True)
+    start_frame = Column(Integer, nullable=True)
+    end_frame = Column(Integer, nullable=True)
+    total_frames = Column(Integer, nullable=True)
+    avg_confidence = Column(Float, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class LamenessRecord(Base):
+    """
+    Lameness observation record for a cow.
+    Stores lameness predictions and scores over time.
+    """
+    __tablename__ = "lameness_records"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    cow_id = Column(UUID(as_uuid=True), ForeignKey("cow_identities.id"), nullable=False, index=True)
+    video_id = Column(String(100), nullable=False, index=True)
+    observation_date = Column(DateTime, default=datetime.utcnow)
+
+    # Pipeline scores
+    fusion_score = Column(Float, nullable=True)
+    tleap_score = Column(Float, nullable=True)
+    tcn_score = Column(Float, nullable=True)
+    transformer_score = Column(Float, nullable=True)
+    gnn_score = Column(Float, nullable=True)
+    graph_transformer_score = Column(Float, nullable=True)
+    ml_ensemble_score = Column(Float, nullable=True)
+
+    # Final prediction
+    is_lame = Column(Boolean, nullable=True)
+    confidence = Column(Float, nullable=True)
+    severity_level = Column(String(20), nullable=True)  # healthy, mild, moderate, severe
+
+    # Human validation
+    human_validated = Column(Boolean, default=False)
+    human_label = Column(Boolean, nullable=True)
+    validator_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    validation_date = Column(DateTime, nullable=True)
+
+
 # ============== DATABASE FUNCTIONS ==============
 
 async def get_db() -> AsyncSession:

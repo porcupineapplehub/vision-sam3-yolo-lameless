@@ -1180,6 +1180,10 @@ class GNNPipeline:
 
         # Cache for building graphs across videos
         self.video_features_cache = {}
+        
+        # Cow ID mapping cache
+        self.cow_id_mapping: Dict[str, str] = {}
+        self.video_timestamps: Dict[str, float] = {}
     
     def _load_config(self) -> dict:
         if self.config_path.exists():
@@ -1216,6 +1220,74 @@ class GNNPipeline:
         self.model.eval()
         num_params = sum(p.numel() for p in self.model.parameters())
         print(f"{self.model_name} parameters: {num_params:,}")
+    
+    def load_cow_id_mapping(self) -> Dict[str, str]:
+        """
+        Load video_id -> cow_id mapping from tracking results.
+        Also loads timestamps for temporal edge construction.
+        """
+        mapping = {}
+        timestamps = {}
+        tracking_dir = Path("/app/data/results/tracking")
+        
+        if not tracking_dir.exists():
+            print("  No tracking results directory found")
+            return mapping
+        
+        for tracking_file in tracking_dir.glob("*_tracking.json"):
+            try:
+                with open(tracking_file) as f:
+                    data = json.load(f)
+                
+                video_id = data.get("video_id")
+                if not video_id:
+                    continue
+                
+                # Get cow_id from Re-ID results
+                reid_results = data.get("reid_results", [])
+                for reid in reid_results:
+                    cow_id = reid.get("cow_id")
+                    if cow_id:
+                        mapping[video_id] = cow_id
+                        break
+                
+                # Get timestamp from tracking data or video metadata
+                timestamp = data.get("timestamp")
+                if timestamp:
+                    # Try to parse timestamp string
+                    try:
+                        from datetime import datetime
+                        if isinstance(timestamp, str):
+                            dt = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+                            timestamps[video_id] = dt.timestamp()
+                        else:
+                            timestamps[video_id] = float(timestamp)
+                    except:
+                        timestamps[video_id] = 0.0
+                else:
+                    # Use file modification time as fallback
+                    timestamps[video_id] = tracking_file.stat().st_mtime
+                    
+            except Exception as e:
+                print(f"  Error reading tracking file {tracking_file}: {e}")
+                continue
+        
+        self.cow_id_mapping = mapping
+        self.video_timestamps = timestamps
+        print(f"  Loaded cow_id mapping: {len(mapping)} videos mapped to cows")
+        return mapping
+    
+    def get_cow_for_video(self, video_id: str) -> Optional[str]:
+        """Get the cow_id for a given video_id"""
+        # Always refresh mapping to pick up new tracking results
+        self.load_cow_id_mapping()
+        return self.cow_id_mapping.get(video_id)
+    
+    def get_videos_for_cow(self, cow_id: str) -> List[str]:
+        """Get all video_ids belonging to a specific cow"""
+        if not self.cow_id_mapping:
+            self.load_cow_id_mapping()
+        return [vid for vid, cid in self.cow_id_mapping.items() if cid == cow_id]
     
     def extract_node_features(self, video_id: str) -> Optional[Dict[str, np.ndarray]]:
         """Extract node features from pipeline results for a video"""
@@ -1296,17 +1368,42 @@ class GNNPipeline:
         
         return features
     
-    def collect_graph_data(self) -> Tuple[np.ndarray, np.ndarray, List[str]]:
-        """Collect features from all analyzed videos for graph construction"""
+    def collect_graph_data(self, filter_cow_id: Optional[str] = None) -> Tuple[Optional[np.ndarray], Optional[np.ndarray], List[str], List[Optional[str]], List[float]]:
+        """
+        Collect features from analyzed videos for graph construction.
+        
+        Args:
+            filter_cow_id: If provided, only include videos belonging to this cow
+        
+        Returns:
+            node_features: (N, D) node feature matrix
+            embeddings: (N, E) DINOv3 embeddings for kNN
+            video_ids: List of video IDs
+            cow_ids: List of cow IDs (or None if unknown)
+            timestamps: List of timestamps for temporal edges
+        """
+        # Refresh cow_id mapping
+        self.load_cow_id_mapping()
+        
         node_features_list = []
         embeddings_list = []
         video_ids = []
+        cow_ids = []
+        timestamps = []
         
         # Scan results directory for available videos
         tleap_dir = Path("/app/data/results/tleap")
         if tleap_dir.exists():
             for result_file in tleap_dir.glob("*_tleap.json"):
                 video_id = result_file.stem.replace("_tleap", "")
+                
+                # Get cow_id for this video
+                cow_id = self.cow_id_mapping.get(video_id)
+                
+                # Filter by cow if requested
+                if filter_cow_id is not None:
+                    if cow_id != filter_cow_id:
+                        continue
                 
                 features = self.extract_node_features(video_id)
                 if features is not None:
@@ -1321,17 +1418,19 @@ class GNNPipeline:
                     node_features_list.append(node_feat)
                     embeddings_list.append(features["embedding"])
                     video_ids.append(video_id)
+                    cow_ids.append(cow_id)
+                    timestamps.append(self.video_timestamps.get(video_id, 0.0))
         
         if not node_features_list:
-            return None, None, []
+            return None, None, [], [], []
         
         node_features = np.stack(node_features_list)
         embeddings = np.stack(embeddings_list)
         
-        return node_features, embeddings, video_ids
+        return node_features, embeddings, video_ids, cow_ids, timestamps
     
     async def process_video(self, video_data: dict):
-        """Process video through GNN pipeline"""
+        """Process video through GNN pipeline with per-cow graph construction"""
         video_id = video_data.get("video_id")
         if not video_id:
             return
@@ -1339,16 +1438,26 @@ class GNNPipeline:
         print(f"GNN pipeline processing video {video_id}")
         
         try:
-            # Collect all video features for graph
-            node_features, embeddings, video_ids = self.collect_graph_data()
+            # Get cow_id for this video
+            target_cow_id = self.get_cow_for_video(video_id)
+            
+            if target_cow_id:
+                print(f"  Video belongs to cow: {target_cow_id}")
+                # Build per-cow graph (only videos of the same cow)
+                node_features, embeddings, video_ids, cow_ids, timestamps = self.collect_graph_data(
+                    filter_cow_id=target_cow_id
+                )
+            else:
+                print(f"  No cow_id found, using global graph")
+                # Fallback: use all videos if no cow_id mapping
+                node_features, embeddings, video_ids, cow_ids, timestamps = self.collect_graph_data()
             
             if node_features is None or len(video_ids) == 0:
                 print(f"  No video features available for graph construction")
                 return
             
-            # Find index of current video
+            # Ensure current video is in the graph
             if video_id not in video_ids:
-                # Add current video to graph
                 features = self.extract_node_features(video_id)
                 if features is None:
                     print(f"  Could not extract features for {video_id}")
@@ -1364,25 +1473,39 @@ class GNNPipeline:
                 node_features = np.vstack([node_features, new_node])
                 embeddings = np.vstack([embeddings, features["embedding"]])
                 video_ids.append(video_id)
+                cow_ids.append(target_cow_id)
+                timestamps.append(self.video_timestamps.get(video_id, 0.0))
             
             target_idx = video_ids.index(video_id)
             
-            print(f"  Graph: {len(video_ids)} nodes")
+            print(f"  Per-cow graph: {len(video_ids)} nodes for cow {target_cow_id or 'unknown'}")
             
-            # Build graph
+            # Build graph with cow_ids and timestamps for temporal edges
             graph = self.graph_builder.build_graph(
                 node_features=node_features,
                 embeddings=embeddings,
-                video_ids=video_ids
+                video_ids=video_ids,
+                cow_ids=cow_ids if target_cow_id else None,
+                timestamps=timestamps if target_cow_id else None
             )
             graph = graph.to(self.device)
             
             # Predict with uncertainty
             mean_pred, std_pred = self.model.predict_with_uncertainty(graph, n_samples=10)
             
-            # Get prediction for target video
-            severity_score = float(mean_pred[target_idx, 0].cpu().numpy())
-            uncertainty = float(std_pred[target_idx, 0].cpu().numpy())
+            # Get prediction for target video (node-level)
+            node_severity_score = float(mean_pred[target_idx, 0].cpu().numpy())
+            node_uncertainty = float(std_pred[target_idx, 0].cpu().numpy())
+            
+            # Get graph-level prediction (cow-level when using per-cow graph)
+            with torch.no_grad():
+                result = self.model(graph)
+                graph_pred = result.get('graph_pred')
+                if graph_pred is not None:
+                    cow_severity_score = float(graph_pred[0, 0].cpu().numpy())
+                else:
+                    # Fallback: average of all node predictions
+                    cow_severity_score = float(mean_pred.mean().cpu().numpy())
             
             # Get neighbor influence
             neighbor_scores = []
@@ -1395,24 +1518,30 @@ class GNNPipeline:
                         "score": float(mean_pred[src, 0].cpu().numpy())
                     })
             
-            # Save results
+            # Save results with both node-level and cow-level predictions
             results = {
                 "video_id": video_id,
+                "cow_id": target_cow_id,
                 "pipeline": "gnn",
                 "model": self.model_name,
-                "severity_score": severity_score,
-                "uncertainty": uncertainty,
-                "prediction": int(severity_score > 0.5),
-                "confidence": 1.0 - uncertainty,
+                "severity_score": node_severity_score,  # Node-level (video) score
+                "cow_severity_score": cow_severity_score,  # Graph-level (cow) score
+                "uncertainty": node_uncertainty,
+                "prediction": int(node_severity_score > 0.5),
+                "cow_prediction": int(cow_severity_score > 0.5),
+                "confidence": 1.0 - node_uncertainty,
                 "graph_info": {
                     "num_nodes": len(video_ids),
                     "num_edges": graph.edge_index.shape[1],
                     "k_neighbors": self.graph_builder.k_neighbors,
                     "has_edge_features": hasattr(graph, 'edge_attr') and graph.edge_attr is not None,
+                    "has_temporal_edges": target_cow_id is not None,
                     "num_heads": 8 if self.model_name == "EnhancedGraphGPS" else 4,
-                    "hierarchical_pooling": self.model_name == "EnhancedGraphGPS"
+                    "hierarchical_pooling": self.model_name == "EnhancedGraphGPS",
+                    "per_cow_graph": target_cow_id is not None
                 },
-                "neighbor_influence": neighbor_scores[:5]  # Top 5 neighbors
+                "neighbor_influence": neighbor_scores[:5],
+                "videos_in_graph": video_ids
             }
 
             results_file = self.results_dir / f"{video_id}_gnn.json"
@@ -1424,16 +1553,21 @@ class GNNPipeline:
                 self.config.get("nats", {}).get("subjects", {}).get("pipeline_gnn", "pipeline.gnn"),
                 {
                     "video_id": video_id,
+                    "cow_id": target_cow_id,
                     "pipeline": "gnn",
                     "results_path": str(results_file),
-                    "severity_score": severity_score,
-                    "uncertainty": uncertainty,
+                    "severity_score": node_severity_score,
+                    "cow_severity_score": cow_severity_score,
+                    "uncertainty": node_uncertainty,
                     "model": self.model_name
                 }
             )
 
-            print(f"  ✅ {self.model_name} completed: score={severity_score:.3f}, uncertainty={uncertainty:.3f}")
-            print(f"     Graph had {len(video_ids)} nodes, {len(neighbor_scores)} neighbors")
+            print(f"  ✅ {self.model_name} completed:")
+            print(f"     Video score={node_severity_score:.3f}, Cow score={cow_severity_score:.3f}")
+            print(f"     Graph: {len(video_ids)} nodes, {len(neighbor_scores)} neighbors")
+            if target_cow_id:
+                print(f"     Cow ID: {target_cow_id}")
             
         except Exception as e:
             print(f"  ❌ Error in GNN pipeline: {e}")

@@ -615,6 +615,158 @@ export const tutorialApi = {
   },
 }
 
+// Cow types
+export interface CowIdentity {
+  id: string
+  cow_id: string
+  tag_number?: string | null
+  total_sightings: number
+  first_seen?: string | null
+  last_seen?: string | null
+  is_active: boolean
+  notes?: string | null
+  current_score?: number | null
+  severity_level?: string | null
+  num_videos?: number
+}
+
+export interface CowPrediction {
+  cow_id: string
+  aggregated_score: number
+  confidence: number
+  num_videos: number
+  total_videos?: number
+  prediction: number
+  severity_level: string
+  video_ids?: string[]
+}
+
+export interface LamenessTimelineEntry {
+  id: string
+  video_id: string
+  date: string | null
+  fusion_score: number | null
+  is_lame: boolean | null
+  confidence: number | null
+  severity_level: string | null
+  pipeline_scores: {
+    tleap?: number | null
+    tcn?: number | null
+    transformer?: number | null
+    gnn?: number | null
+    graph_transformer?: number | null
+    ml_ensemble?: number | null
+  }
+  human_validated: boolean
+  human_label: boolean | null
+}
+
+export interface CowVideo {
+  video_id: string
+  track_id: number
+  reid_confidence?: number | null
+  start_frame?: number | null
+  end_frame?: number | null
+  total_frames?: number | null
+  created_at?: string | null
+  lameness_score?: number | null
+  prediction?: number | null
+  confidence?: number | null
+}
+
+// Cow Management endpoints
+export const cowsApi = {
+  // List all cows with summary stats
+  list: async (params?: {
+    skip?: number
+    limit?: number
+    is_active?: boolean
+    severity_filter?: string
+  }): Promise<{ cows: CowIdentity[]; total: number; skip: number; limit: number }> => {
+    const response = await apiClient.get('/api/cows', { params })
+    return response.data
+  },
+
+  // Get detailed info about a specific cow
+  get: async (cowId: string) => {
+    const response = await apiClient.get(`/api/cows/${cowId}`)
+    return response.data
+  },
+
+  // Get lameness history timeline
+  getLameness: async (cowId: string, days = 30): Promise<{
+    cow_id: string
+    timeline: LamenessTimelineEntry[]
+    total_records: number
+    days_range: number
+    trend: string
+  }> => {
+    const response = await apiClient.get(`/api/cows/${cowId}/lameness`, {
+      params: { days }
+    })
+    return response.data
+  },
+
+  // Get all videos for a cow
+  getVideos: async (cowId: string, params?: { skip?: number; limit?: number }): Promise<{
+    cow_id: string
+    videos: CowVideo[]
+    total: number
+    skip: number
+    limit: number
+  }> => {
+    const response = await apiClient.get(`/api/cows/${cowId}/videos`, { params })
+    return response.data
+  },
+
+  // Get current aggregated prediction
+  getPrediction: async (cowId: string): Promise<{
+    cow_id: string
+    prediction: CowPrediction
+    last_updated: string | null
+    latest_video: string | null
+  }> => {
+    const response = await apiClient.get(`/api/cows/${cowId}/prediction`)
+    return response.data
+  },
+
+  // Update cow info
+  update: async (cowId: string, updates: {
+    tag_number?: string | null
+    notes?: string | null
+    is_active?: boolean
+  }) => {
+    const response = await apiClient.patch(`/api/cows/${cowId}`, null, { params: updates })
+    return response.data
+  },
+
+  // Validate a lameness record
+  validateRecord: async (cowId: string, recordId: string, isLame: boolean, validatorId?: string) => {
+    const response = await apiClient.get(`/api/cows/${cowId}/lameness/${recordId}/validate`, {
+      params: { is_lame: isLame, validator_id: validatorId }
+    })
+    return response.data
+  },
+
+  // Get summary statistics
+  getStats: async (): Promise<{
+    total_cows: number
+    active_cows: number
+    total_videos_tracked: number
+    total_lameness_records: number
+    severity_distribution: {
+      healthy: number
+      mild: number
+      moderate: number
+      severe: number
+      unknown: number
+    }
+  }> => {
+    const response = await apiClient.get('/api/cows/stats/summary')
+    return response.data
+  }
+}
+
 // Auth endpoints
 export const authApi = {
   login: async (email: string, password: string) => {
