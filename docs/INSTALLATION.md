@@ -462,18 +462,19 @@ python -m uvicorn app.main:app --reload --port 8000
 
 After installation:
 
-1. 📖 Read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) to understand the system
+1. 📖 Read [ARCHITECTURE.md](ARCHITECTURE.md) to understand the system
 2. 📊 Upload sample videos and test the pipeline
 3. 🎨 Customize your theme in Settings
 4. 🔒 Change default passwords
-5. 📚 Review [docs/PIPELINES_DETAILED.md](docs/PIPELINES_DETAILED.md) for ML details
+5. 📚 Review [PIPELINES_DETAILED.md](PIPELINES_DETAILED.md) for ML details
 
 ---
 
 ## Support
 
 - Check [DEPLOYMENT.md](DEPLOYMENT.md) for deployment details
-- Review [docs/](docs/) for architecture documentation
+- Review [ARCHITECTURE.md](ARCHITECTURE.md) for system architecture
+- Review [PIPELINES_DETAILED.md](PIPELINES_DETAILED.md) for ML pipeline details
 - Check container logs: `docker compose logs <service>`
 
 

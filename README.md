@@ -165,7 +165,7 @@ Upload → preprocess/curate → (YOLO, SAM3, DINOv3, T‑LEAP) → {ML, TCN, Tr
 - Docker and Docker Compose
 - Conda/Mamba (for local development)
 
-> 📖 **New to the project?** See the complete [INSTALLATION.md](INSTALLATION.md) guide for fresh computer setup.
+> 📖 **New to the project?** See the complete [docs/INSTALLATION.md](docs/INSTALLATION.md) guide for fresh computer setup.
 
 ## Quick Start
 
@@ -281,7 +281,11 @@ vision-sam3-yolo-lameless/
 │   └── quality_reports/
 ├── docs/                        # Documentation
 │   ├── ARCHITECTURE.md
+│   ├── DEPLOYMENT.md
+│   ├── INSTALLATION.md
 │   ├── PIPELINES_DETAILED.md
+│   ├── ML_CONFIGURATION_GUIDE.md
+│   ├── COW_POSE_DATA_GUIDE.md
 │   └── tracking-by-detection.md
 ├── research/                    # Research code and papers
 ├── docker-compose.yml
