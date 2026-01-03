@@ -6,11 +6,12 @@ Key Features:
 - Evidence-based summaries (no hallucination)
 - Structured prompts with strict input constraints
 - Executive summary, guidance, and action recommendations
-- Integration with OpenAI API or local LLM
+- Priority: OpenAI API > Ollama Local LLM > Skip (no template fallback)
 """
 import asyncio
 import json
 import os
+import httpx
 from pathlib import Path
 from typing import Dict, Any, Optional, List
 import yaml
@@ -20,6 +21,11 @@ from shared.utils.nats_client import NATSClient
 class LLMExplanationService:
     """
     Service for generating LLM-based explanations of lameness predictions.
+    
+    Priority:
+    1. OpenAI API (if OPENAI_API_KEY is set)
+    2. Ollama Local LLM (if running)
+    3. Skip explanation generation (no template fallback)
     
     Constraints:
     - Only reference provided inputs (no external knowledge)
@@ -37,11 +43,18 @@ STRICT RULES:
 4. Keep explanations clear and actionable for farm staff
 5. Use simple language, avoid jargon
 
-OUTPUT FORMAT:
-1. Executive Summary (2-3 sentences): Main conclusion with confidence level
-2. Key Evidence: Bullet points of supporting data
-3. Uncertainties: Any missing data or model disagreements  
-4. Recommended Action: Clear next step"""
+OUTPUT FORMAT (use exact headers):
+## Executive Summary
+(2-3 sentences: Main conclusion with confidence level)
+
+## Key Evidence
+(Bullet points of supporting data from pipelines)
+
+## Uncertainties
+(Any missing data or model disagreements)
+
+## Recommended Action
+(Clear next step for farm staff)"""
 
     EXPLANATION_TEMPLATE = """Generate an explanation for this lameness prediction:
 
@@ -78,28 +91,80 @@ Generate a clear explanation following the output format specified."""
         self.config = self._load_config()
         self.nats_client = NATSClient(str(self.config_path))
         
-        # LLM configuration
-        self.llm_provider = os.getenv("LLM_PROVIDER", "openai")
+        # OpenAI configuration
         self.openai_api_key = os.getenv("OPENAI_API_KEY", "")
         self.openai_model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+        
+        # Ollama configuration
+        self.ollama_host = os.getenv("OLLAMA_HOST", "http://host.docker.internal:11434")
+        self.ollama_model = os.getenv("OLLAMA_MODEL", "llama3.2")  # Good balance of speed/quality
         
         # Results directory
         self.results_dir = Path("/app/data/results/explanations")
         self.results_dir.mkdir(parents=True, exist_ok=True)
         
-        # Initialize OpenAI client if available
+        # Initialize providers
         self.openai_client = None
+        self.ollama_available = False
+        self.llm_provider = None
+        
+        self._init_providers()
+    
+    def _init_providers(self):
+        """Initialize LLM providers in priority order"""
+        
+        # 1. Try OpenAI first
         if self.openai_api_key:
             try:
                 from openai import OpenAI
                 self.openai_client = OpenAI(api_key=self.openai_api_key)
-                print(f"✅ OpenAI client initialized with model: {self.openai_model}")
+                # Test connection
+                self.openai_client.models.list()
+                self.llm_provider = "openai"
+                print(f"✅ OpenAI initialized with model: {self.openai_model}")
+                return
             except ImportError:
                 print("⚠️ OpenAI library not installed")
             except Exception as e:
-                print(f"⚠️ Failed to initialize OpenAI client: {e}")
-        else:
-            print("⚠️ No OPENAI_API_KEY set; using template-based explanations")
+                print(f"⚠️ OpenAI connection failed: {e}")
+        
+        # 2. Try Ollama as fallback
+        self._check_ollama()
+        if self.ollama_available:
+            self.llm_provider = "ollama"
+            print(f"✅ Ollama initialized with model: {self.ollama_model}")
+            return
+        
+        # 3. No LLM available
+        self.llm_provider = None
+        print("⚠️ No LLM available (no OpenAI key, no Ollama running)")
+        print("   Explanations will NOT be generated")
+    
+    def _check_ollama(self) -> bool:
+        """Check if Ollama is available and has models"""
+        try:
+            import httpx
+            response = httpx.get(f"{self.ollama_host}/api/tags", timeout=5.0)
+            if response.status_code == 200:
+                data = response.json()
+                models = [m.get("name", "").split(":")[0] for m in data.get("models", [])]
+                
+                if models:
+                    # Check if preferred model is available
+                    if self.ollama_model not in models:
+                        # Use first available model
+                        self.ollama_model = models[0]
+                        print(f"   Using available Ollama model: {self.ollama_model}")
+                    
+                    self.ollama_available = True
+                    return True
+                else:
+                    print(f"⚠️ Ollama running but no models installed")
+                    print(f"   Run: ollama pull {self.ollama_model}")
+            return False
+        except Exception as e:
+            print(f"⚠️ Ollama not available at {self.ollama_host}: {e}")
+            return False
     
     def _load_config(self) -> dict:
         if self.config_path.exists():
@@ -229,10 +294,10 @@ Generate a clear explanation following the output format specified."""
             models_agree=models_agree
         )
     
-    async def generate_explanation_openai(self, prompt: str) -> str:
+    async def generate_explanation_openai(self, prompt: str) -> Optional[str]:
         """Generate explanation using OpenAI API"""
         if not self.openai_client:
-            return self.generate_template_explanation(prompt)
+            return None
         
         try:
             response = self.openai_client.chat.completions.create(
@@ -247,78 +312,79 @@ Generate a clear explanation following the output format specified."""
             return response.choices[0].message.content
         except Exception as e:
             print(f"OpenAI API error: {e}")
-            return self.generate_template_explanation(prompt)
+            return None
     
-    def generate_template_explanation(self, prompt: str) -> str:
-        """Generate a template-based explanation when LLM is unavailable"""
-        # Parse the prompt to extract key values
-        lines = prompt.split("\n")
+    async def generate_explanation_ollama(self, prompt: str) -> Optional[str]:
+        """Generate explanation using Ollama local LLM"""
+        if not self.ollama_available:
+            return None
         
-        prediction = "Unknown"
-        confidence_level = "Unknown"
-        decision_mode = "unknown"
-        
-        for line in lines:
-            if "Prediction:" in line:
-                prediction = "Lame" if "Lame" in line else "Sound"
-            if "Confidence:" in line:
-                confidence_level = "High" if "High" in line else "Medium" if "Medium" in line else "Low"
-            if "Decision Mode:" in line:
-                decision_mode = line.split(":")[-1].strip()
-        
-        # Generate template explanation
-        explanation = f"""## Executive Summary
-The AI system predicts this cow is **{prediction}** with **{confidence_level}** confidence. """
-        
-        if decision_mode == "human":
-            explanation += "This prediction is primarily based on human expert consensus."
-        elif decision_mode == "automated":
-            explanation += "This prediction is based on automated pipeline analysis with strong model agreement."
-        elif decision_mode == "hybrid":
-            explanation += "This prediction combines human assessments with automated analysis."
-        else:
-            explanation += "More data is recommended to increase prediction confidence."
-        
-        explanation += """
-
-## Key Evidence
-- Multiple pipelines analyzed gait patterns and visual features
-- See pipeline contributions above for individual model predictions
-
-## Uncertainties
-"""
-        if confidence_level == "Low":
-            explanation += "- Low confidence indicates limited data or model disagreement\n"
-            explanation += "- Additional human labels recommended\n"
-        else:
-            explanation += "- See individual pipeline uncertainties for details\n"
-        
-        explanation += """
-## Recommended Action
-"""
-        if prediction == "Lame" and confidence_level == "High":
-            explanation += "Recommend veterinary examination at earliest convenience."
-        elif prediction == "Lame":
-            explanation += "Monitor this cow closely and consider veterinary consultation."
-        else:
-            explanation += "Continue routine monitoring."
-        
-        return explanation
+        try:
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                response = await client.post(
+                    f"{self.ollama_host}/api/generate",
+                    json={
+                        "model": self.ollama_model,
+                        "prompt": f"{self.SYSTEM_PROMPT}\n\n{prompt}",
+                        "stream": False,
+                        "options": {
+                            "temperature": 0.3,
+                            "num_predict": 500
+                        }
+                    }
+                )
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    return data.get("response", "")
+                else:
+                    print(f"Ollama API error: {response.status_code}")
+                    return None
+        except Exception as e:
+            print(f"Ollama error: {e}")
+            # Mark as unavailable for future requests
+            self.ollama_available = False
+            return None
     
     async def generate_explanation(self, video_id: str, 
                                    fusion_result: Dict[str, Any],
                                    shap_data: Optional[Dict[str, Any]] = None,
-                                   quality_data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+                                   quality_data: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
         """Generate complete explanation for a video"""
+        
+        # Check if any LLM is available
+        if not self.llm_provider:
+            # Re-check Ollama in case it was started
+            self._check_ollama()
+            if self.ollama_available:
+                self.llm_provider = "ollama"
+            else:
+                print(f"  ⏭️ Skipping explanation for {video_id} (no LLM available)")
+                return None
         
         # Build prompt
         prompt = self.build_prompt(fusion_result, shap_data, quality_data)
         
-        # Generate explanation
-        if self.openai_client:
+        # Generate explanation based on provider
+        explanation_text = None
+        
+        if self.llm_provider == "openai":
             explanation_text = await self.generate_explanation_openai(prompt)
-        else:
-            explanation_text = self.generate_template_explanation(prompt)
+            if not explanation_text:
+                # Try Ollama as fallback
+                self._check_ollama()
+                if self.ollama_available:
+                    explanation_text = await self.generate_explanation_ollama(prompt)
+                    if explanation_text:
+                        self.llm_provider = "ollama"
+        
+        elif self.llm_provider == "ollama":
+            explanation_text = await self.generate_explanation_ollama(prompt)
+        
+        # If no explanation generated, skip
+        if not explanation_text:
+            print(f"  ⏭️ Skipping explanation for {video_id} (LLM generation failed)")
+            return None
         
         # Parse sections from explanation
         sections = {
@@ -330,13 +396,14 @@ The AI system predicts this cow is **{prediction}** with **{confidence_level}** 
         
         current_section = None
         for line in explanation_text.split("\n"):
-            if "Executive Summary" in line:
+            line_lower = line.lower()
+            if "executive summary" in line_lower:
                 current_section = "executive_summary"
-            elif "Key Evidence" in line:
+            elif "key evidence" in line_lower:
                 current_section = "key_evidence"
-            elif "Uncertainties" in line:
+            elif "uncertainties" in line_lower:
                 current_section = "uncertainties"
-            elif "Recommended Action" in line:
+            elif "recommended action" in line_lower:
                 current_section = "recommended_action"
             elif current_section:
                 sections[current_section] += line + "\n"
@@ -350,7 +417,8 @@ The AI system predicts this cow is **{prediction}** with **{confidence_level}** 
             "explanation": explanation_text,
             "sections": sections,
             "prompt_used": prompt,
-            "llm_provider": self.llm_provider if self.openai_client else "template",
+            "llm_provider": self.llm_provider,
+            "llm_model": self.openai_model if self.llm_provider == "openai" else self.ollama_model,
             "fusion_summary": {
                 "prediction": "Lame" if fusion_result.get("final_probability", 0.5) > 0.5 else "Sound",
                 "probability": fusion_result.get("final_probability", 0.5),
@@ -398,17 +466,19 @@ The AI system predicts this cow is **{prediction}** with **{confidence_level}** 
                 video_id, fusion_result, shap_data
             )
             
-            print(f"  ✅ Explanation generated for {video_id}")
-            
-            # Publish result
-            await self.nats_client.publish(
-                "explanation.generated",
-                {
-                    "video_id": video_id,
-                    "explanation_path": str(self.results_dir / f"{video_id}_explanation.json"),
-                    "summary": explanation["sections"]["executive_summary"][:200]
-                }
-            )
+            if explanation:
+                print(f"  ✅ Explanation generated for {video_id} via {self.llm_provider}")
+                
+                # Publish result
+                await self.nats_client.publish(
+                    "explanation.generated",
+                    {
+                        "video_id": video_id,
+                        "explanation_path": str(self.results_dir / f"{video_id}_explanation.json"),
+                        "summary": explanation["sections"]["executive_summary"][:200],
+                        "provider": self.llm_provider
+                    }
+                )
             
         except Exception as e:
             print(f"  ❌ Error generating explanation: {e}")
@@ -430,9 +500,13 @@ The AI system predicts this cow is **{prediction}** with **{confidence_level}** 
         print("=" * 60)
         print("LLM Explanation Service Started")
         print("=" * 60)
-        print(f"Provider: {self.llm_provider if self.openai_client else 'template'}")
-        if self.openai_client:
-            print(f"Model: {self.openai_model}")
+        if self.llm_provider == "openai":
+            print(f"Provider: OpenAI ({self.openai_model})")
+        elif self.llm_provider == "ollama":
+            print(f"Provider: Ollama Local ({self.ollama_model})")
+        else:
+            print("Provider: NONE - Explanations will be skipped")
+            print("  To enable: Set OPENAI_API_KEY or run Ollama")
         print("=" * 60)
         
         await asyncio.Event().wait()
@@ -446,4 +520,3 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-

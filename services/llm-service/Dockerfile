@@ -22,6 +22,7 @@ COPY shared /app/shared
 # Set environment variables
 ENV PATH /opt/conda/envs/llm-service/bin:$PATH
 ENV PYTHONPATH /app:$PYTHONPATH
+ENV PYTHONUNBUFFERED=1
 
 # Run the application
 CMD ["conda", "run", "-n", "llm-service", "python", "-m", "app.main"]

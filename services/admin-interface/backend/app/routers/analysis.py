@@ -273,42 +273,27 @@ async def get_llm_explanation(video_id: str):
     explanation_file = RESULTS_DIR / "explanations" / f"{video_id}_explanation.json"
     
     if not explanation_file.exists():
-        # Try to generate a basic explanation from fusion results
+        # Check if fusion results exist
         fusion_file = RESULTS_DIR / "fusion" / f"{video_id}_fusion.json"
         if not fusion_file.exists():
-            raise HTTPException(status_code=404, detail="No analysis results found for this video")
+            # No analysis at all
+            return {
+                "video_id": video_id,
+                "status": "not_available",
+                "message": "No analysis results found for this video"
+            }
         
-        # Return a placeholder indicating LLM explanation not yet generated
-        with open(fusion_file) as f:
-            fusion_data = json.load(f)
-        
-        fusion_result = fusion_data.get("fusion_result", {})
-        probability = fusion_result.get("final_probability", 0.5)
-        prediction = "Lame" if probability > 0.5 else "Sound"
-        confidence = fusion_result.get("confidence", 0.5)
-        
+        # Fusion exists but no explanation - LLM not available or not run yet
         return {
             "video_id": video_id,
-            "status": "pending",
-            "message": "LLM explanation not yet generated. Showing basic summary.",
-            "explanation": f"The AI system predicts this cow is **{prediction}** with {confidence:.0%} confidence.",
-            "sections": {
-                "executive_summary": f"Prediction: {prediction} ({probability:.1%} probability)",
-                "key_evidence": "See pipeline contributions in the analysis results.",
-                "uncertainties": "Full LLM analysis pending.",
-                "recommended_action": "Monitor cow and request full analysis if needed."
-            },
-            "llm_provider": "none",
-            "fusion_summary": {
-                "prediction": prediction,
-                "probability": probability,
-                "confidence": confidence,
-                "decision_mode": fusion_result.get("decision_mode", "unknown")
-            }
+            "status": "not_available",
+            "message": "LLM explanation not available (no LLM configured or analysis pending)"
         }
     
     with open(explanation_file) as f:
-        return json.load(f)
+        data = json.load(f)
+        data["status"] = "available"
+        return data
 
 
 @router.post("/{video_id}/explanation/generate")
