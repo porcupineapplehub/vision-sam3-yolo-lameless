@@ -8,9 +8,123 @@ The system is built as a microservices architecture with Docker containers, usin
 
 ### System Diagram
 
-![System Architecture](docs/design-diagram.png)
+We keep the architecture diagram embedded directly in markdown (Mermaid + ASCII) to stay versioned with the codebase.
+
+```mermaid
+flowchart TB
+  %% ======= Clients / UI =======
+  subgraph UI[Admin UI]
+    FE[admin-frontend<br/>React + TS]
+    BE[admin-backend<br/>FastAPI]
+  end
+
+  %% ======= Infra =======
+  subgraph Infra[Infrastructure]
+    NATS[(NATS)]
+    PG[(Postgres)]
+    QD[(Qdrant)]
+    FS[(Filesystem<br/>data/videos + data/processed + data/results)]
+  end
+
+  %% ======= Video lifecycle =======
+  subgraph Video[Video lifecycle]
+    ING[video-ingestion]
+    PRE[video-preprocessing]
+    CUR[clip-curation]
+  end
+
+  %% ======= Feature pipelines =======
+  subgraph Feat[Feature extraction]
+    YOLO[yolo-pipeline]
+    SAM3[sam3-pipeline]
+    DINO[dinov3-pipeline]
+    TLEAP[tleap-pipeline]
+  end
+
+  %% ======= Identity =======
+  subgraph ID[Identity / Tracking]
+    TRACK[tracking-service<br/>ByteTrack + Re-ID]
+  end
+
+  %% ======= Predictors =======
+  subgraph Pred[Predictors]
+    ML[ml-pipeline]
+    TCN[tcn-pipeline]
+    TR[transformer-pipeline]
+    GNN[gnn-pipeline]
+    GT[graph-transformer-pipeline]
+  end
+
+  FUS[fusion-service]
+
+  %% ======= UI wiring =======
+  FE -->|HTTP| BE
+  BE --> PG
+  BE --> FS
+
+  %% ======= Message bus =======
+  ING -->|video.uploaded| NATS
+  PRE -->|video.preprocessed| NATS
+  CUR -->|video.curated| NATS
+
+  %% ======= Feature extraction from preprocessed videos =======
+  NATS --> YOLO
+  NATS --> SAM3
+  NATS --> DINO
+  NATS --> TLEAP
+
+  YOLO -->|pipeline.yolo| NATS
+  SAM3 -->|pipeline.sam3| NATS
+  DINO -->|pipeline.dinov3| NATS
+  TLEAP -->|pipeline.tleap| NATS
+
+  %% ======= Storage side effects =======
+  PRE --> FS
+  CUR --> FS
+  YOLO --> FS
+  SAM3 --> FS
+  DINO --> FS
+  DINO --> QD
+  TLEAP --> FS
+
+  %% ======= Tracking / cow registry =======
+  NATS --> TRACK
+  TRACK --> PG
+  TRACK --> FS
+  TRACK -->|tracking.complete| NATS
+
+  %% ======= Predictors =======
+  NATS --> ML
+  NATS --> TCN
+  NATS --> TR
+  NATS --> GNN
+  NATS --> GT
+
+  ML -->|pipeline.ml| NATS
+  TCN -->|pipeline.tcn| NATS
+  TR -->|pipeline.transformer| NATS
+  GNN -->|pipeline.gnn| NATS
+  GT -->|pipeline.graph_transformer| NATS
+
+  %% ======= Fusion =======
+  NATS --> FUS
+  FUS -->|pipeline.fusion| NATS
+  FUS --> FS
+  FUS -->|analysis.complete| NATS
+```
+
+Quick ASCII summary:
+
+```
+Upload → preprocess/curate → (YOLO, SAM3, DINOv3, T‑LEAP) → {ML, TCN, Transformer, GNN, Graph‑Transformer} → Fusion → Admin UI
+                               │           │
+                               │           └─ DINOv3 avg embedding → Qdrant (vector DB)
+                               └─ YOLO + DINOv3 → tracking-service → Postgres cow registry (cow_identities + track_history)
+```
 
 > For detailed architecture documentation, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+>
+> For a step-by-step pipeline walkthrough (SAM3, DINOv3, T‑LEAP → ML + tracking/ID), see [docs/PIPELINES_DETAILED.md](docs/PIPELINES_DETAILED.md)
 
 ### Core Components
 
@@ -43,6 +157,8 @@ The system is built as a microservices architecture with Docker containers, usin
    - LLM Service - Natural language summaries
 
 7. **Admin Interface** (FastAPI + React): Dashboard, visualization, training module
+   - Cow Registry: `/cows`
+   - Cow Detail: `/cows/:cowId`
 
 ## Prerequisites
 
@@ -163,7 +279,8 @@ vision-sam3-yolo-lameless/
 │   └── quality_reports/
 ├── docs/                        # Documentation
 │   ├── ARCHITECTURE.md
-│   └── design-diagram.png
+│   ├── PIPELINES_DETAILED.md
+│   └── tracking-by-detection.md
 ├── research/                    # Research code and papers
 ├── docker-compose.yml
 ├── environment.yml

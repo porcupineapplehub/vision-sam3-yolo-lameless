@@ -1,15 +1,16 @@
-# Lameness Detection Platform - Architecture Document
+# Lameness Detection Platform — Architecture
 
-## Table of Contents
-1. [Overview](#overview)
-2. [System Architecture Diagram](#system-architecture-diagram)
-3. [Core Components](#core-components)
-4. [Pipeline Architecture](#pipeline-architecture)
-5. [Human-in-the-Loop System](#human-in-the-loop-system)
-6. [Data Flow](#data-flow)
-7. [Service Catalog](#service-catalog)
-8. [Technology Stack](#technology-stack)
-9. [Deployment](#deployment)
+## Table of contents
+- [Overview](#overview)
+- [What’s new in the current architecture (2026)](#whats-new-in-the-current-architecture-2026)
+- [System architecture diagram](#system-architecture-diagram)
+- [Core components](#core-components)
+- [Pipeline architecture](#pipeline-architecture)
+- [Human-in-the-loop system](#human-in-the-loop-system)
+- [Data flow](#data-flow)
+- [Service catalog](#service-catalog)
+- [Technology stack](#technology-stack)
+- [Deployment](#deployment)
 
 ---
 
@@ -24,17 +25,144 @@ The Lameness Detection Platform is a comprehensive multi-pipeline system for aut
 - **Human-in-the-Loop** (Pairwise/Triplet comparisons, Elo ranking)
 - **Explainable AI** (SHAP, LLM explanations)
 
-The platform processes 30-second video uploads into canonical 5-second clips, analyzes them through parallel pipelines, fuses predictions with human consensus, and provides explainable results.
+The platform processes uploaded videos into canonical clips, runs multiple CV/pose/graph/ML pipelines, and fuses all evidence into an explainable lameness prediction.
+
+This document is meant to be **code-accurate** for this repository. For the step-by-step pipeline walkthrough (SAM3, DINOv3, T‑LEAP and how features feed ML), see `docs/PIPELINES_DETAILED.md`.
+
+---
+
+## What’s new in the current architecture (2026)
+
+### Cow identity (ID) and Cow Registry
+
+- A dedicated **`tracking-service`** assigns persistent **cow IDs** across videos using:
+  - within-video tracking (ByteTrack-style)
+  - cross-video Re-ID using **DINOv3 embeddings + Qdrant vector search**
+- The Admin UI includes a **Cow Registry** page (`/cows`) and a Cow Detail page (`/cows/:cowId`) backed by `admin-backend` endpoints under `/api/cows/*`.
+
+### Graph-based predictors
+
+- In addition to tabular ML and time-series models, the repo includes graph-based predictors:
+  - `gnn-pipeline` (graph reasoning)
+  - `graph-transformer-pipeline` (Graphormer-style)
+
+### Canonical “source of truth” for data contracts
+
+- NATS subjects and datastore URLs are defined in `shared/config/config.yaml`.
+- Most pipelines both:
+  - write a result file under `data/results/<pipeline>/...`
+  - publish a NATS message referencing `results_path` and `features`.
 
 ---
 
 ## System Architecture Diagram
 
-### Visual Overview
+### Mermaid (recommended)
 
-![System Architecture](design-diagram.png)
+```mermaid
+flowchart TB
+  %% ======= Clients / UI =======
+  subgraph UI[Admin UI]
+    FE[admin-frontend<br/>React + TS]
+    BE[admin-backend<br/>FastAPI]
+  end
 
-### Detailed ASCII Diagram
+  %% ======= Infra =======
+  subgraph Infra[Infrastructure]
+    NATS[(NATS)]
+    PG[(Postgres)]
+    QD[(Qdrant)]
+    FS[(Filesystem<br/>data/videos + data/processed + data/results)]
+  end
+
+  %% ======= Video lifecycle =======
+  subgraph Video[Video lifecycle]
+    ING[video-ingestion]
+    PRE[video-preprocessing]
+    CUR[clip-curation]
+  end
+
+  %% ======= Feature pipelines =======
+  subgraph Feat[Feature extraction]
+    YOLO[yolo-pipeline]
+    SAM3[sam3-pipeline]
+    DINO[dinov3-pipeline]
+    TLEAP[tleap-pipeline]
+  end
+
+  %% ======= Identity =======
+  subgraph ID[Identity / Tracking]
+    TRACK[tracking-service<br/>ByteTrack + Re-ID]
+  end
+
+  %% ======= Predictors =======
+  subgraph Pred[Predictors]
+    ML[ml-pipeline]
+    TCN[tcn-pipeline]
+    TR[transformer-pipeline]
+    GNN[gnn-pipeline]
+    GT[graph-transformer-pipeline]
+  end
+
+  FUS[fusion-service]
+
+  %% ======= UI wiring =======
+  FE -->|HTTP| BE
+  BE --> PG
+  BE --> FS
+
+  %% ======= Message bus =======
+  ING -->|video.uploaded| NATS
+  PRE -->|video.preprocessed| NATS
+  CUR -->|video.curated| NATS
+
+  %% ======= Feature extraction from preprocessed videos =======
+  NATS --> YOLO
+  NATS --> SAM3
+  NATS --> DINO
+  NATS --> TLEAP
+
+  YOLO -->|pipeline.yolo| NATS
+  SAM3 -->|pipeline.sam3| NATS
+  DINO -->|pipeline.dinov3| NATS
+  TLEAP -->|pipeline.tleap| NATS
+
+  %% ======= Storage side effects =======
+  PRE --> FS
+  CUR --> FS
+  YOLO --> FS
+  SAM3 --> FS
+  DINO --> FS
+  DINO --> QD
+  TLEAP --> FS
+
+  %% ======= Tracking / cow registry =======
+  NATS --> TRACK
+  TRACK --> PG
+  TRACK --> FS
+  TRACK -->|tracking.complete| NATS
+
+  %% ======= Predictors =======
+  NATS --> ML
+  NATS --> TCN
+  NATS --> TR
+  NATS --> GNN
+  NATS --> GT
+
+  ML -->|pipeline.ml| NATS
+  TCN -->|pipeline.tcn| NATS
+  TR -->|pipeline.transformer| NATS
+  GNN -->|pipeline.gnn| NATS
+  GT -->|pipeline.graph_transformer| NATS
+
+  %% ======= Fusion =======
+  NATS --> FUS
+  FUS -->|pipeline.fusion| NATS
+  FUS --> FS
+  FUS -->|analysis.complete| NATS
+```
+
+### Detailed ASCII Diagram (updated)
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────┐
@@ -66,12 +194,14 @@ The platform processes 30-second video uploads into canonical 5-second clips, an
 │                                   │    │                                       │
 │  Subjects:                        │    │  ┌─────────────┐  ┌────────────────┐  │
 │  • video.uploaded                 │    │  │ PostgreSQL  │  │    Qdrant      │  │
-│  • video.curated                  │    │  │  (Metadata) │  │  (Embeddings)  │  │
-│  • pipeline.{yolo,sam3,dinov3}    │    │  └─────────────┘  └────────────────┘  │
+│  • video.preprocessed             │    │  │ (Users + Cow │  │  (Embeddings)  │  │
+│  • video.curated                  │    │  │  Registry)  │  └────────────────┘  │
+│  • pipeline.{yolo,sam3,dinov3}    │    │  └─────────────┘                       │
 │  • pipeline.{tleap,tcn,transformer}│   │                                       │
-│  • pipeline.{gnn,ml,fusion}       │    │  ┌─────────────────────────────────┐  │
+│  • pipeline.{gnn,graph_transformer,ml,fusion}                                   │
+│  • tracking.{complete,reid.match} │    │  ┌─────────────────────────────────┐  │
 │  • hitl.comparison.submitted      │    │  │     File System (Videos)        │  │
-│  • analysis.complete              │    │  │  /data/videos, /data/canonical  │  │
+│  • analysis.complete              │    │  │  /data/videos, /data/processed  │  │
 │                                   │    │  │  /data/results, /data/quality   │  │
 └───────────────────┬───────────────┘    └───────────────────────────────────────┘
                     │
@@ -104,15 +234,27 @@ The platform processes 30-second video uploads into canonical 5-second clips, an
 │                                       │                                          │
 │                                       ▼                                          │
 │  ┌─────────────────────────────────────────────────────────────────────────────┐│
+│  │                         IDENTITY / TRACKING                                 ││
+│  │                                                                             ││
+│  │  ┌──────────────────────────────┐                                           ││
+│  │  │        tracking-service      │                                           ││
+│  │  │  • within-video tracking     │                                           ││
+│  │  │  • cross-video Re-ID (QD)    │                                           ││
+│  │  │  • writes Cow Registry (PG)  │                                           ││
+│  │  └──────────────────────────────┘                                           ││
+│  └─────────────────────────────────────────────────────────────────────────────┘│
+│                                       │                                          │
+│                                       ▼                                          │
+│  ┌─────────────────────────────────────────────────────────────────────────────┐│
 │  │                      DEEP LEARNING LAYER (PARALLEL)                         ││
 │  │                                                                             ││
 │  │  ┌────────────────────┐  ┌────────────────────┐  ┌────────────────────┐    ││
-│  │  │         TCN        │  │    Transformer     │  │   Graph Transformer│    ││
-│  │  │                    │  │                    │  │     (GraphGPS)     │    ││
-│  │  │ • Dilated Conv1D   │  │ • Self-attention   │  │                    │    ││
-│  │  │ • Temporal patterns│  │ • Positional enc   │  │ • kNN graph edges  │    ││
-│  │  │ • MC Dropout       │  │ • Saliency output  │  │ • Local + Global   │    ││
-│  │  │ • Uncertainty est  │  │ • Masking for gaps │  │ • Neighbor context │    ││
+│  │  │         TCN        │  │    Transformer     │  │   Graph Pipelines  │    ││
+│  │  │                    │  │                    │  │ (GNN + Graphormer) │    ││
+│  │  │ • Dilated Conv1D   │  │ • Self-attention   │  │ • similarity graph │    ││
+│  │  │ • Temporal patterns│  │ • Positional enc   │  │ • neighbor context │    ││
+│  │  │ • MC Dropout       │  │ • Saliency output  │  │ • uncertainty      │    ││
+│  │  │ • Uncertainty est  │  │ • Masking for gaps │  │                    │    ││
 │  │  └────────────────────┘  └────────────────────┘  └────────────────────┘    ││
 │  └─────────────────────────────────────────────────────────────────────────────┘│
 │                                       │                                          │
@@ -395,21 +537,27 @@ The platform processes 30-second video uploads into canonical 5-second clips, an
 
 ### NATS Message Subjects
 
-| Subject | Publisher | Subscribers | Payload |
-|---------|-----------|-------------|---------|
-| `video.uploaded` | Video Ingestion | Preprocessing, Clip Curation | `{video_id, file_path}` |
-| `video.curated` | Clip Curation | All feature pipelines | `{video_id, canonical_path, quality_score}` |
-| `pipeline.yolo` | YOLO Pipeline | ML Pipeline, Fusion | `{video_id, detections, features}` |
-| `pipeline.sam3` | SAM3 Pipeline | ML Pipeline, Fusion | `{video_id, masks, features}` |
-| `pipeline.dinov3` | DINOv3 Pipeline | GNN Pipeline, Fusion | `{video_id, embedding}` |
-| `pipeline.tleap` | T-LEAP Pipeline | TCN, Transformer, ML | `{video_id, keypoints, locomotion}` |
-| `pipeline.tcn` | TCN Pipeline | Fusion | `{video_id, score, uncertainty}` |
-| `pipeline.transformer` | Transformer Pipeline | Fusion | `{video_id, score, uncertainty}` |
-| `pipeline.gnn` | GNN Pipeline | Fusion | `{video_id, score, neighbors}` |
-| `pipeline.ml` | ML Pipeline | Fusion | `{video_id, ensemble_prediction}` |
-| `pipeline.fusion` | Fusion Service | SHAP, LLM, Frontend | `{video_id, final_probability}` |
-| `hitl.comparison.submitted` | Frontend | Rater Reliability | `{video_id_1, video_id_2, winner}` |
-| `analysis.complete` | Fusion | LLM Service | `{video_id, results_path}` |
+Source of truth: `shared/config/config.yaml`
+
+| Subject | Publisher | Subscribers | Notes |
+|---------|-----------|-------------|------|
+| `video.uploaded` | video-ingestion | video-preprocessing, clip-curation | new raw upload |
+| `video.preprocessed` | video-preprocessing | yolo/sam3/dinov3/tleap/etc | processed video path available |
+| `video.curated` | clip-curation | (optional) downstream consumers | canonical clip ready |
+| `pipeline.yolo` | yolo-pipeline | tracking-service, (others) | bbox detections + aggregate features |
+| `pipeline.sam3` | sam3-pipeline | ml-pipeline | segmentation-derived features |
+| `pipeline.dinov3` | dinov3-pipeline | tracking-service, gnn/graph-transformer | embeddings + similar_cases + neighbor_evidence |
+| `pipeline.tleap` | tleap-pipeline | tcn/transformer/ml | pose sequences + locomotion features |
+| `pipeline.tcn` | tcn-pipeline | fusion-service | time-series score |
+| `pipeline.transformer` | transformer-pipeline | fusion-service | time-series score + attention info |
+| `pipeline.gnn` | gnn-pipeline | fusion-service | graph-based score |
+| `pipeline.graph_transformer` | graph-transformer-pipeline | fusion-service | graph transformer score + uncertainty |
+| `pipeline.ml` | ml-pipeline | fusion-service | tabular ensemble prediction |
+| `tracking.complete` | tracking-service | (optional) consumers | track assignment written + summary published |
+| `tracking.reid.match` | tracking-service | (optional) consumers | re-id match events |
+| `tracking.lameness.update` | tracking-service | (optional) consumers | cow-level lameness DB update event |
+| `pipeline.fusion` | fusion-service | admin-backend (via files), shap/llm | final probability + confidence |
+| `analysis.complete` | fusion-service | llm-service | high-level “analysis done” hook |
 
 ---
 
@@ -437,6 +585,8 @@ The platform processes 30-second video uploads into canonical 5-second clips, an
 | **tcn-pipeline** | Temporal analysis | Pose sequence | Severity score, uncertainty |
 | **transformer-pipeline** | Temporal analysis | Pose sequence | Severity score, saliency |
 | **gnn-pipeline** | Graph reasoning | All features | Score, neighbor context |
+| **graph-transformer-pipeline** | Graph transformer reasoning | All features | Score, uncertainty, attention info |
+| **tracking-service** | Tracking + cross-video cow Re-ID | YOLO + DINOv3 | Cow IDs + per-video track history |
 | **ml-pipeline** | Tabular ML | All features | Ensemble prediction |
 | **fusion-service** | Prediction fusion | All predictions | Final probability |
 | **rater-reliability** | Rater modeling | Comparisons | Rater weights, consensus |
@@ -609,6 +759,6 @@ flowchart TB
 
 ---
 
-*Document Version: 1.0*  
-*Last Updated: December 2024*
+*Document Version: 2.0*  
+*Last Updated: 2026-01-03*
 

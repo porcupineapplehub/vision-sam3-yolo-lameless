@@ -169,13 +169,52 @@ class MLPipeline:
             feature_names.extend(["dinov3_neighbor_evidence", "dinov3_similar_count"])
         
         # T-LEAP features (if available)
-        if pipeline_results.get("tleap") and "locomotion_traits" in pipeline_results["tleap"]:
-            tleap = pipeline_results["tleap"]["locomotion_traits"]
-            features.extend([
-                tleap.get("avg_stride_length", 0),
-                tleap.get("avg_head_bob", 0),
-                tleap.get("asymmetry_score", 0)
-            ])
+        #
+        # Note: the T-LEAP pipeline currently writes `locomotion_features` in the JSON,
+        # but older versions used `locomotion_traits`. Support both.
+        if pipeline_results.get("tleap"):
+            tleap_data = pipeline_results["tleap"] or {}
+            locomotion = (
+                tleap_data.get("locomotion_traits")
+                or tleap_data.get("locomotion_features")
+                or {}
+            )
+
+            # Preferred (legacy) keys if present
+            if any(k in locomotion for k in ["avg_stride_length", "avg_head_bob", "asymmetry_score"]):
+                features.extend([
+                    locomotion.get("avg_stride_length", 0),
+                    locomotion.get("avg_head_bob", 0),
+                    locomotion.get("asymmetry_score", 0)
+                ])
+            else:
+                # Derive a compact 3-feature summary from current locomotion_features keys
+                stride_means = [
+                    locomotion.get("stride_fl_mean"),
+                    locomotion.get("stride_fr_mean"),
+                    locomotion.get("stride_rl_mean"),
+                    locomotion.get("stride_rr_mean"),
+                ]
+                stride_means = [float(x) for x in stride_means if x is not None]
+                avg_stride_length = float(np.mean(stride_means)) if stride_means else 0.0
+
+                # head bob: prefer magnitude (pixels), else use normalized score if that's all we have
+                avg_head_bob = float(
+                    locomotion.get("head_bob_magnitude")
+                    if locomotion.get("head_bob_magnitude") is not None
+                    else locomotion.get("head_bob_score", 0.0)
+                )
+
+                # asymmetry: average front/rear asymmetry if present
+                asym_vals = [
+                    locomotion.get("front_leg_asymmetry"),
+                    locomotion.get("rear_leg_asymmetry"),
+                ]
+                asym_vals = [float(x) for x in asym_vals if x is not None]
+                asymmetry_score = float(np.mean(asym_vals)) if asym_vals else 0.0
+
+                features.extend([avg_stride_length, avg_head_bob, asymmetry_score])
+
             feature_names.extend(["tleap_stride", "tleap_head_bob", "tleap_asymmetry"])
         
         # If no features extracted, return default

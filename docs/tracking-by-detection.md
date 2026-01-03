@@ -1,28 +1,83 @@
-What Kind of Algorithms Do They Use?
-Modern MOT for YOLO is tracking-by-detection:
+# Tracking-by-detection (as implemented in this repo)
 
-YOLO detects cows (bounding boxes) in each frame.
-Tracker associates detections across frames using:
-Motion: Kalman filter predicts position (e.g., SORT-based).
-Appearance (Re-ID): Extracts feature embeddings (vectors) from cropped cow images, matches similar-looking cows (cosine similarity). Helps with occlusions/ID switches.
-IoU matching: Overlap between boxes.
+## What this service is for
 
-Popular ones:
-ByteTrack: Associates high + low-confidence detections; fast, reduces ID switches.
-BoT-SORT: Improves on ByteTrack with camera motion compensation + better Re-ID.
-DeepSORT: Classic, strong on appearance for similar objects (like cows).
-Used in cow-specific papers: YOLO + ByteTrack/BoT for behavior monitoring, lameness detection.
+The goal of tracking in this system is **cow identity**:
 
+- **Within a video**: keep a stable track id for a cow while it walks
+- **Across videos**: match the same cow again later (persistent `cow_id`)
 
-Cows are challenging (similar appearance, occlusions in herds), so appearance Re-ID is key.
-Is Vector DB a Good Approach?
+In this repo, that is implemented by `tracking-service`.
 
-For short-term tracking in one video: No need—trackers handle it with in-memory embeddings.
-For long-term Re-ID (e.g., identify same cow across days/months/videos): Yes! Extract embeddings (feature vectors) from detections using a Re-ID model (e.g., OSNet, or YOLO's built-in features). Store in a vector database (e.g., FAISS, Pinecone, Milvus) for fast similarity search.
-Query new cow crops against the DB to find/match existing IDs.
-Used in multi-camera or large-scale farm systems.
-Some advanced setups (e.g., multi-camera cow tracking) use vector search for global Re-ID.
+---
 
+## Core idea (tracking-by-detection)
 
-Start with built-in trackers for per-video IDs—they're simple and effective for most cow projects. If you need cross-video persistence, add a vector DB later.
-If you share more details (e.g., your YOLO version, video setup), I can give more specific code/advice!
+1. **Detect** cows in each frame (YOLO produces bounding boxes)
+2. **Associate** detections across frames into tracks (ByteTrack-style association)
+3. **Re‑ID** the track across videos using appearance embeddings (DINOv3 + Qdrant)
+
+This split is robust in farm videos because:
+- multiple cows can look similar
+- occlusions happen often
+- the walking direction and framing vary between clips
+
+---
+
+## Repo-specific integration
+
+### Inputs
+
+The tracking service consumes:
+
+- `pipeline.yolo` (detections by frame)
+- `pipeline.dinov3` (appearance embeddings; used for Re‑ID)
+
+NATS subjects are defined in `shared/config/config.yaml`.
+
+### Outputs
+
+Tracking produces:
+
+- `data/results/tracking/{video_id}_tracking.json`
+- Postgres updates:
+  - `cow_identities` (persistent cows)
+  - `track_history` (video sightings)
+- NATS publishes:
+  - `tracking.complete`
+  - `tracking.reid.match`
+
+---
+
+## Algorithms used (practical)
+
+### Within-video tracking (ByteTrack-like)
+
+Typical steps:
+
+- Keep a set of active tracks
+- For each new frame:
+  - predict track positions (Kalman filter)
+  - compute association cost (IoU and/or distance)
+  - match detections to tracks (Hungarian assignment)
+  - update matched tracks; create new tracks for unmatched detections
+
+### Cross-video Re‑ID (vector DB)
+
+This repo uses a vector DB approach for persistence:
+
+- Use an embedding model (DINOv3 pipeline) to produce a vector representation
+- Store/query vectors in **Qdrant**
+- Match new tracks to existing cows by similarity (Cosine distance)
+
+This makes identity “sticky” across days and different videos.
+
+---
+
+## How this affects lameness prediction
+
+Once a clip is assigned to a cow:
+
+- the UI can show **Cow Registry** (cow → list of videos)
+- graph-based predictors can build **per-cow graphs** (optional/next step depending on configuration)
+- the system can write to `lameness_records` to build cow-level history
