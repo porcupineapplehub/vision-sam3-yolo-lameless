@@ -343,8 +343,11 @@ async def batch_reprocess(
 
                 subject = subject_map.get(pipeline)
                 if subject:
+                    # Include processed_path for pipelines that need it
+                    video_path = f"/app/data/videos/{video_id}.mp4"
                     msg = {
                         "video_id": video_id,
+                        "processed_path": video_path,
                         "triggered_by": str(user.id),
                         "batch_reprocess": True
                     }

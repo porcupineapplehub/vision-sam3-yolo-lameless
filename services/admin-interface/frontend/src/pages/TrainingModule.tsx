@@ -281,7 +281,7 @@ export default function TrainingModule() {
 
   const loadAvailableVideos = async () => {
     try {
-      const data = await videosApi.list(0, 100)
+      const data = await videosApi.list(0, 1000)
       if (data.videos) {
         setAvailableVideos(data.videos)
       }

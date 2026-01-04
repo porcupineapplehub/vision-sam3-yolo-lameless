@@ -148,6 +148,11 @@ services:
     build:
       context: .
       dockerfile: services/tcn-pipeline/Dockerfile
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 4G
     volumes:
       - ./data:/app/data
       - ./shared:/app/shared
@@ -161,6 +166,11 @@ services:
     build:
       context: .
       dockerfile: services/transformer-pipeline/Dockerfile
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 4G
     volumes:
       - ./data:/app/data
       - ./shared:/app/shared
@@ -192,6 +202,11 @@ services:
     build:
       context: .
       dockerfile: services/gnn-pipeline/Dockerfile
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 4G
     volumes:
       - ./data:/app/data
       - ./shared:/app/shared
@@ -206,6 +221,11 @@ services:
     build:
       context: .
       dockerfile: services/graph-transformer-pipeline/Dockerfile
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 4G
     volumes:
       - ./data:/app/data
       - ./shared:/app/shared
@@ -296,6 +316,11 @@ services:
     build:
       context: .
       dockerfile: services/training-service/Dockerfile
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 8G
     volumes:
       - ./data:/app/data
       - ./shared:/app/shared
@@ -325,6 +350,13 @@ services:
     build:
       context: .
       dockerfile: services/admin-interface/backend/Dockerfile
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 16G
+        reservations:
+          memory: 512M
     volumes:
       - ./data:/app/data
       - ./shared:/app/shared

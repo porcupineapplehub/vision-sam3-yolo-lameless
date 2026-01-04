@@ -41,7 +41,7 @@ export default function Dashboard() {
   const loadData = async () => {
     try {
       const [videoData, statsData, statusData, pairwiseData] = await Promise.all([
-        videosApi.list(),
+        videosApi.list(0, 1000),
         trainingApi.getStats().catch(() => null),
         trainingApi.getStatus().catch(() => null),
         trainingApi.getPairwiseStats().catch(() => null)

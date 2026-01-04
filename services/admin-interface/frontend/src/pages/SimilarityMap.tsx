@@ -252,7 +252,7 @@ export default function SimilarityMap() {
 
       // Fallback: Load actual videos from the video list API
       try {
-        const videosResponse = await videosApi.list(0, 100)
+        const videosResponse = await videosApi.list(0, 1000)
         const videos = videosResponse.videos || videosResponse || []
 
         if (videos.length > 0) {
