@@ -365,6 +365,8 @@ services:
       - POSTGRES_URL=postgresql://lameness_user:lameness_pass@postgres:5432/lameness_db
       - POSTGRES_PORT=5433
       - QDRANT_URL=http://qdrant:6333
+      # Storage backend: "local" for development, "s3" for AWS deployment
+      - STORAGE_BACKEND=local
     depends_on:
       - nats
       - postgres

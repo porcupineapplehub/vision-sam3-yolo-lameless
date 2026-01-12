@@ -39,3 +39,24 @@ output "s3_bucket_arn" {
   description = "ARN of the S3 bucket for backups"
   value       = aws_s3_bucket.backups.arn
 }
+
+# Video storage outputs
+output "videos_bucket_name" {
+  description = "Name of the S3 bucket for videos"
+  value       = aws_s3_bucket.videos.id
+}
+
+output "videos_bucket_arn" {
+  description = "ARN of the S3 bucket for videos"
+  value       = aws_s3_bucket.videos.arn
+}
+
+output "cloudfront_distribution_id" {
+  description = "ID of the CloudFront distribution for videos"
+  value       = var.enable_cloudfront ? aws_cloudfront_distribution.videos[0].id : ""
+}
+
+output "cloudfront_domain_name" {
+  description = "Domain name of the CloudFront distribution"
+  value       = var.enable_cloudfront ? aws_cloudfront_distribution.videos[0].domain_name : ""
+}

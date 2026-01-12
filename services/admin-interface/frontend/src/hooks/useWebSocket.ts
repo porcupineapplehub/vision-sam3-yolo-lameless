@@ -31,9 +31,11 @@ interface UseWebSocketReturn {
   isConnected: boolean
 }
 
+// In production, use current host. In development, use localhost:8000
 const WS_BASE_URL = import.meta.env.VITE_WS_URL ||
   (window.location.protocol === 'https:' ? 'wss://' : 'ws://') +
-  (import.meta.env.VITE_API_URL?.replace(/^https?:\/\//, '') || 'localhost:8000')
+  (import.meta.env.VITE_API_URL?.replace(/^https?:\/\//, '') ||
+   (import.meta.env.PROD ? window.location.host : 'localhost:8000'))
 
 export function useWebSocket(
   channel: 'pipeline' | 'health' | 'queue' | 'rater',
