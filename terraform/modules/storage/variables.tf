@@ -19,3 +19,9 @@ variable "efs_security_group" {
   description = "Security group ID for EFS"
   type        = string
 }
+
+variable "enable_cloudfront" {
+  description = "Whether to create CloudFront distribution for video streaming"
+  type        = bool
+  default     = false
+}

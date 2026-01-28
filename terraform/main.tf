@@ -97,6 +97,11 @@ locals {
       memory = 1024
       port   = 8006
     }
+    "annotation-renderer" = {
+      cpu    = 1024
+      memory = 2048
+      port   = 8000
+    }
   }
 
   # GPU services (run on EC2)
@@ -129,6 +134,7 @@ module "storage" {
   vpc_id             = module.networking.vpc_id
   private_subnet_ids = module.networking.private_subnet_ids
   efs_security_group = module.networking.efs_security_group_id
+  enable_cloudfront  = var.enable_cloudfront
 }
 
 # Database Module
@@ -168,6 +174,9 @@ module "ecs" {
   secrets_arn             = module.secrets.secrets_arn
   alb_target_group_arn    = module.load_balancer.backend_target_group_arn
   frontend_target_group_arn = module.load_balancer.frontend_target_group_arn
+  videos_bucket_name      = module.storage.videos_bucket_name
+  cloudfront_domain       = module.storage.cloudfront_domain_name
+  image_tag               = var.image_tag
 }
 
 # Load Balancer Module

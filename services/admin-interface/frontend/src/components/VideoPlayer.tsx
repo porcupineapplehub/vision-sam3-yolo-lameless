@@ -25,14 +25,19 @@ export default function VideoPlayer({
   const [annotationProgress, setAnnotationProgress] = useState(0)
   const [annotationMessage, setAnnotationMessage] = useState('')
   const [videoMetadata, setVideoMetadata] = useState<any>(null)
+  const [streamUrl, setStreamUrl] = useState<string | null>(null)
 
-  // Load video metadata and check for annotations
+  // Load video metadata, stream URL, and check for annotations
   useEffect(() => {
     const loadVideoInfo = async () => {
       try {
         const info = await videosApi.get(videoId)
         setVideoMetadata(info.metadata)
         setHasAnnotated(info.has_annotated)
+        // Use stream_url from API if available (S3 pre-signed URL)
+        if (info.stream_url) {
+          setStreamUrl(info.stream_url)
+        }
       } catch (error) {
         console.error('Failed to load video info:', error)
       }
@@ -89,9 +94,10 @@ export default function VideoPlayer({
     return () => clearInterval(interval)
   }, [isAnnotating, videoId])
 
+  // Use S3 stream URL if available, otherwise fall back to local streaming endpoint
   const videoSrc = showAnnotated && hasAnnotated
     ? videosApi.getAnnotatedUrl(videoId)
-    : videosApi.getStreamUrl(videoId)
+    : (streamUrl || videosApi.getStreamUrl(videoId))
 
   // Reload video when source changes
   useEffect(() => {

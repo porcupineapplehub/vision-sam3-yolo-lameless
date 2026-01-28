@@ -19,6 +19,10 @@ from datetime import datetime
 from uuid import UUID
 import numpy as np
 import yaml
+import threading
+
+from fastapi import FastAPI
+import uvicorn
 
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
@@ -29,6 +33,13 @@ from sqlalchemy import select
 import uuid
 
 from shared.utils.nats_client import NATSClient
+
+# FastAPI app for health checks
+health_app = FastAPI()
+
+@health_app.get("/health")
+async def health_check():
+    return {"status": "healthy", "service": "fusion-service"}
 
 Base = declarative_base()
 
@@ -741,8 +752,18 @@ class FusionService:
         await asyncio.Event().wait()
 
 
+def run_health_server():
+    """Run health server in a separate thread"""
+    uvicorn.run(health_app, host="0.0.0.0", port=8006, log_level="warning")
+
+
 async def main():
     """Main entry point"""
+    # Start health server in background thread
+    health_thread = threading.Thread(target=run_health_server, daemon=True)
+    health_thread.start()
+    print("Health server started on port 8006")
+
     service = FusionService()
     await service.start()
 
