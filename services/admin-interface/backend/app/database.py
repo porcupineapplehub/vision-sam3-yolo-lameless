@@ -5,7 +5,7 @@ Async SQLAlchemy setup for PostgreSQL
 import os
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import declarative_base
-from sqlalchemy import Column, String, Boolean, DateTime, Float, Integer, Text, ForeignKey, CheckConstraint
+from sqlalchemy import Column, String, Boolean, DateTime, Float, Integer, BigInteger, Text, ForeignKey, CheckConstraint, Index
 from sqlalchemy.dialects.postgresql import UUID
 from datetime import datetime
 import uuid
@@ -91,6 +91,52 @@ class ProcessingJob(Base):
             "status IN ('pending', 'processing', 'completed', 'failed', 'cancelled')",
             name="valid_job_status"
         ),
+    )
+
+
+class Video(Base):
+    """Video model for storing video metadata"""
+    __tablename__ = "videos"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    filename = Column(String(255), nullable=False)
+    original_filename = Column(String(255), nullable=True)  # Original upload filename
+    file_size = Column(BigInteger, nullable=False)
+
+    # Storage info
+    storage_backend = Column(String(10), nullable=False, default="local")  # "local" or "s3"
+    s3_key = Column(String(512), nullable=True)  # S3 object key (e.g., "raw/uuid.mp4")
+    file_path = Column(String(512), nullable=True)  # Local file path
+
+    # Label/training data
+    label = Column(Integer, nullable=True)  # 0=sound, 1=lame, NULL=unlabeled
+    label_confidence = Column(String(20), nullable=True)  # "certain", "uncertain"
+
+    # Processing status
+    status = Column(String(20), default="uploaded")  # uploaded, processing, analyzed, failed
+    has_analysis = Column(Boolean, default=False)
+    has_annotated = Column(Boolean, default=False)
+
+    # Video metadata (populated after processing)
+    duration = Column(Float, nullable=True)
+    fps = Column(Float, nullable=True)
+    width = Column(Integer, nullable=True)
+    height = Column(Integer, nullable=True)
+    frame_count = Column(Integer, nullable=True)
+
+    # Relationships
+    uploaded_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+
+    # Timestamps
+    uploaded_at = Column(DateTime, default=datetime.utcnow)
+    processed_at = Column(DateTime, nullable=True)
+
+    # Indexes for fast lookups
+    __table_args__ = (
+        Index('idx_videos_storage', 'storage_backend'),
+        Index('idx_videos_status', 'status'),
+        Index('idx_videos_label', 'label'),
+        Index('idx_videos_uploaded_at', 'uploaded_at'),
     )
 
 

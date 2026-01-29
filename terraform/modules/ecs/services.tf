@@ -1,5 +1,22 @@
 # ECS Services Configuration
 
+# Third-party images that should come from Docker Hub, not ECR
+locals {
+  third_party_images = {
+    "nats"   = "nats:2.10-alpine"
+    "qdrant" = "qdrant/qdrant:v1.7.4"
+  }
+
+  # Services that need more ephemeral storage (large ML images)
+  large_storage_services = [
+    "video-preprocessing",
+    "tracking-service",
+    "clip-curation",
+    "ml-pipeline",
+    "fusion-service"
+  ]
+}
+
 # Service Discovery Services
 resource "aws_service_discovery_service" "services" {
   for_each = var.ecs_services
@@ -34,10 +51,16 @@ resource "aws_ecs_task_definition" "services" {
   execution_role_arn       = aws_iam_role.ecs_execution.arn
   task_role_arn            = aws_iam_role.ecs_task.arn
 
+  # Increase ephemeral storage for ML services (default is 20GB, max is 200GB)
+  ephemeral_storage {
+    size_in_gib = contains(local.large_storage_services, each.key) ? 50 : 21
+  }
+
   container_definitions = jsonencode([
     {
       name      = each.key
-      image     = var.ecr_registry != "" ? "${var.ecr_registry}/${each.key}:latest" : "${each.key}:latest"
+      # Use official Docker Hub images for third-party services, ECR for our custom services
+      image     = lookup(local.third_party_images, each.key, var.ecr_registry != "" ? "${var.ecr_registry}/${each.key}:${var.image_tag}" : "${each.key}:${var.image_tag}")
       essential = true
 
       portMappings = [
@@ -47,7 +70,7 @@ resource "aws_ecs_task_definition" "services" {
         }
       ]
 
-      environment = [
+      environment = concat([
         {
           name  = "NATS_URL"
           value = "nats://nats.${var.name_prefix}.local:4222"
@@ -59,12 +82,37 @@ resource "aws_ecs_task_definition" "services" {
         {
           name  = "SERVICE_NAME"
           value = each.key
+        },
+        {
+          name  = "AWS_REGION"
+          value = data.aws_region.current.name
         }
-      ]
+      ],
+      # Add S3/CloudFront env vars for services that need video access
+      contains(["admin-backend", "video-ingestion", "video-preprocessing", "annotation-renderer"], each.key) ? [
+        {
+          name  = "STORAGE_BACKEND"
+          value = "s3"
+        },
+        {
+          name  = "S3_VIDEOS_BUCKET"
+          value = var.videos_bucket_name
+        },
+        {
+          name  = "CLOUDFRONT_DOMAIN"
+          value = var.cloudfront_domain
+        }
+      ] : []
+      )
 
-      secrets = [
+      # Third-party services don't need secrets
+      secrets = contains(keys(local.third_party_images), each.key) ? [] : [
         {
           name      = "DATABASE_URL"
+          valueFrom = "${var.secrets_arn}:DATABASE_URL::"
+        },
+        {
+          name      = "POSTGRES_URL"
           valueFrom = "${var.secrets_arn}:DATABASE_URL::"
         },
         {
@@ -73,7 +121,8 @@ resource "aws_ecs_task_definition" "services" {
         }
       ]
 
-      mountPoints = [
+      # Third-party services don't need EFS mounts
+      mountPoints = contains(keys(local.third_party_images), each.key) ? [] : [
         {
           sourceVolume  = "efs-data"
           containerPath = "/app/data"
@@ -90,7 +139,7 @@ resource "aws_ecs_task_definition" "services" {
         }
       }
 
-      healthCheck = each.key == "nats" ? null : {
+      healthCheck = contains(["nats", "qdrant"], each.key) ? null : {
         command     = ["CMD-SHELL", "curl -f http://localhost:${each.value.port}/health || exit 1"]
         interval    = 30
         timeout     = 5
@@ -161,7 +210,7 @@ resource "aws_ecs_service" "services" {
   deployment_minimum_healthy_percent = 100
 
   lifecycle {
-    ignore_changes = [desired_count, task_definition]
+    ignore_changes = [desired_count]
   }
 
   tags = {

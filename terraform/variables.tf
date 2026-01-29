@@ -72,3 +72,17 @@ variable "use_spot_instances" {
   type        = bool
   default     = true
 }
+
+# CloudFront Configuration
+variable "enable_cloudfront" {
+  description = "Enable CloudFront CDN for video streaming (requires cloudfront:* IAM permissions)"
+  type        = bool
+  default     = false
+}
+
+# Container Image Tag
+variable "image_tag" {
+  description = "Docker image tag to use for custom services (e.g., latest, v20260106-amd64)"
+  type        = string
+  default     = "v20260106-amd64"
+}

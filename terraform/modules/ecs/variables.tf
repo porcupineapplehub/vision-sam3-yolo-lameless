@@ -59,3 +59,21 @@ variable "frontend_target_group_arn" {
   description = "ARN of the ALB target group for frontend"
   type        = string
 }
+
+variable "videos_bucket_name" {
+  description = "S3 bucket name for video storage"
+  type        = string
+  default     = ""
+}
+
+variable "cloudfront_domain" {
+  description = "CloudFront domain for video streaming"
+  type        = string
+  default     = ""
+}
+
+variable "image_tag" {
+  description = "Docker image tag to use for custom services"
+  type        = string
+  default     = "latest"
+}

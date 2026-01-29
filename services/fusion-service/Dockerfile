@@ -2,6 +2,11 @@ FROM continuumio/miniconda3:latest
 
 WORKDIR /app
 
+# Install system dependencies for health check
+RUN apt-get update && apt-get install -y \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
 # Install mamba
 RUN conda install -y mamba -n base -c conda-forge
 

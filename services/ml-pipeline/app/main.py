@@ -10,7 +10,19 @@ import numpy as np
 import pandas as pd
 from typing import Dict, Any, List, Optional
 import yaml
+import threading
+
+from fastapi import FastAPI
+import uvicorn
+
 from shared.utils.nats_client import NATSClient
+
+# FastAPI app for health checks
+health_app = FastAPI()
+
+@health_app.get("/health")
+async def health_check():
+    return {"status": "healthy", "service": "ml-pipeline"}
 
 # ML libraries
 from catboost import CatBoostClassifier
@@ -368,8 +380,18 @@ class MLPipeline:
         await asyncio.Event().wait()
 
 
+def run_health_server():
+    """Run health server in a separate thread"""
+    uvicorn.run(health_app, host="0.0.0.0", port=8005, log_level="warning")
+
+
 async def main():
     """Main entry point"""
+    # Start health server in background thread
+    health_thread = threading.Thread(target=run_health_server, daemon=True)
+    health_thread.start()
+    print("Health server started on port 8005")
+
     pipeline = MLPipeline()
     await pipeline.start()
 

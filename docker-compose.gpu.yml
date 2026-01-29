@@ -1,4 +1,18 @@
+# Docker Compose for GPU-enabled services
+# Requires NVIDIA Docker runtime and nvidia-docker-compose
+#
+# Usage:
+#   docker compose -f docker-compose.gpu.yml up
+#
+# Prerequisites:
+#   - NVIDIA GPU with CUDA support
+#   - NVIDIA Docker runtime installed
+#   - nvidia-container-toolkit installed
+#
+# Verify GPU access: docker run --rm --gpus all nvidia/cuda:12.1.0-base-ubuntu22.04 nvidia-smi
+
 services:
+  # Infrastructure services (same as regular docker-compose.yml)
   nats:
     image: nats:latest
     ports:
@@ -44,6 +58,207 @@ services:
       retries: 5
       start_period: 10s
 
+  # GPU-enabled ML Pipeline Services
+  yolo-pipeline:
+    build:
+      context: .
+      dockerfile: services/yolo-pipeline/Dockerfile.gpu
+    image: yolo-pipeline-gpu:latest
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    volumes:
+      - ./data:/app/data
+      - ./shared:/app/shared
+    environment:
+      - NATS_URL=nats://nats:4222
+      - NVIDIA_VISIBLE_DEVICES=all
+      - CUDA_VISIBLE_DEVICES=0
+    depends_on:
+      - nats
+    restart: unless-stopped
+
+  sam3-pipeline:
+    build:
+      context: .
+      dockerfile: services/sam3-pipeline/Dockerfile.gpu
+    image: sam3-pipeline-gpu:latest
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    volumes:
+      - ./data:/app/data
+      - ./shared:/app/shared
+    environment:
+      - NATS_URL=nats://nats:4222
+      - NVIDIA_VISIBLE_DEVICES=all
+      - CUDA_VISIBLE_DEVICES=0
+    depends_on:
+      - nats
+    restart: unless-stopped
+
+  dinov3-pipeline:
+    build:
+      context: .
+      dockerfile: services/dinov3-pipeline/Dockerfile.gpu
+    image: dinov3-pipeline-gpu:latest
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    volumes:
+      - ./data:/app/data
+      - ./shared:/app/shared
+    environment:
+      - NATS_URL=nats://nats:4222
+      - QDRANT_URL=http://qdrant:6333
+      - NVIDIA_VISIBLE_DEVICES=all
+      - CUDA_VISIBLE_DEVICES=0
+    depends_on:
+      - nats
+      - qdrant
+    restart: unless-stopped
+
+  tleap-pipeline:
+    build:
+      context: .
+      dockerfile: services/tleap-pipeline/Dockerfile.gpu
+    image: tleap-pipeline-gpu:latest
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    volumes:
+      - ./data:/app/data
+      - ./shared:/app/shared
+    environment:
+      - NATS_URL=nats://nats:4222
+      - PYTHONUNBUFFERED=1
+      - NVIDIA_VISIBLE_DEVICES=all
+      - CUDA_VISIBLE_DEVICES=0
+    depends_on:
+      - nats
+    restart: unless-stopped
+
+  tcn-pipeline:
+    build:
+      context: .
+      dockerfile: services/tcn-pipeline/Dockerfile.gpu
+    image: tcn-pipeline-gpu:latest
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+        limits:
+          memory: 8G
+    volumes:
+      - ./data:/app/data
+      - ./shared:/app/shared
+    environment:
+      - NATS_URL=nats://nats:4222
+      - NVIDIA_VISIBLE_DEVICES=all
+      - CUDA_VISIBLE_DEVICES=0
+    depends_on:
+      - nats
+      - tleap-pipeline
+    restart: unless-stopped
+
+  transformer-pipeline:
+    build:
+      context: .
+      dockerfile: services/transformer-pipeline/Dockerfile.gpu
+    image: transformer-pipeline-gpu:latest
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+        limits:
+          memory: 8G
+    volumes:
+      - ./data:/app/data
+      - ./shared:/app/shared
+    environment:
+      - NATS_URL=nats://nats:4222
+      - NVIDIA_VISIBLE_DEVICES=all
+      - CUDA_VISIBLE_DEVICES=0
+    depends_on:
+      - nats
+      - tleap-pipeline
+    restart: unless-stopped
+
+  gnn-pipeline:
+    build:
+      context: .
+      dockerfile: services/gnn-pipeline/Dockerfile.gpu
+    image: gnn-pipeline-gpu:latest
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+        limits:
+          memory: 8G
+    volumes:
+      - ./data:/app/data
+      - ./shared:/app/shared
+    environment:
+      - NATS_URL=nats://nats:4222
+      - NVIDIA_VISIBLE_DEVICES=all
+      - CUDA_VISIBLE_DEVICES=0
+    depends_on:
+      - nats
+      - dinov3-pipeline
+    restart: unless-stopped
+
+  graph-transformer-pipeline:
+    build:
+      context: .
+      dockerfile: services/graph-transformer-pipeline/Dockerfile.gpu
+    image: graph-transformer-pipeline-gpu:latest
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+        limits:
+          memory: 8G
+    volumes:
+      - ./data:/app/data
+      - ./shared:/app/shared
+    environment:
+      - NATS_URL=nats://nats:4222
+      - NVIDIA_VISIBLE_DEVICES=all
+      - CUDA_VISIBLE_DEVICES=0
+    depends_on:
+      - nats
+      - dinov3-pipeline
+    restart: unless-stopped
+
+  # Non-GPU services can use regular images
   video-ingestion:
     build:
       context: .
@@ -89,97 +304,6 @@ services:
       - nats
       - video-ingestion
 
-  yolo-pipeline:
-    build:
-      context: .
-      dockerfile: services/yolo-pipeline/Dockerfile
-    volumes:
-      - ./data:/app/data
-      - ./shared:/app/shared
-    environment:
-      - NATS_URL=nats://nats:4222
-    depends_on:
-      - nats
-      - video-preprocessing
-
-  sam3-pipeline:
-    build:
-      context: .
-      dockerfile: services/sam3-pipeline/Dockerfile
-    volumes:
-      - ./data:/app/data
-      - ./shared:/app/shared
-    environment:
-      - NATS_URL=nats://nats:4222
-    depends_on:
-      - nats
-      - video-preprocessing
-
-  dinov3-pipeline:
-    build:
-      context: .
-      dockerfile: services/dinov3-pipeline/Dockerfile
-    volumes:
-      - ./data:/app/data
-      - ./shared:/app/shared
-    environment:
-      - NATS_URL=nats://nats:4222
-      - QDRANT_URL=http://qdrant:6333
-    depends_on:
-      - nats
-      - qdrant
-      - video-preprocessing
-
-  tleap-pipeline:
-    build:
-      context: .
-      dockerfile: services/tleap-pipeline/Dockerfile
-    volumes:
-      - ./data:/app/data
-      - ./shared:/app/shared
-    environment:
-      - NATS_URL=nats://nats:4222
-      - PYTHONUNBUFFERED=1
-    depends_on:
-      - nats
-      - video-preprocessing
-
-  tcn-pipeline:
-    build:
-      context: .
-      dockerfile: services/tcn-pipeline/Dockerfile
-    restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          memory: 4G
-    volumes:
-      - ./data:/app/data
-      - ./shared:/app/shared
-    environment:
-      - NATS_URL=nats://nats:4222
-    depends_on:
-      - nats
-      - tleap-pipeline
-
-  transformer-pipeline:
-    build:
-      context: .
-      dockerfile: services/transformer-pipeline/Dockerfile
-    restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          memory: 4G
-    volumes:
-      - ./data:/app/data
-      - ./shared:/app/shared
-    environment:
-      - NATS_URL=nats://nats:4222
-    depends_on:
-      - nats
-      - tleap-pipeline
-
   tracking-service:
     build:
       context: .
@@ -197,44 +321,6 @@ services:
       - qdrant
       - yolo-pipeline
       - dinov3-pipeline
-
-  gnn-pipeline:
-    build:
-      context: .
-      dockerfile: services/gnn-pipeline/Dockerfile
-    restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          memory: 4G
-    volumes:
-      - ./data:/app/data
-      - ./shared:/app/shared
-    environment:
-      - NATS_URL=nats://nats:4222
-    depends_on:
-      - nats
-      - dinov3-pipeline
-      - tracking-service
-
-  graph-transformer-pipeline:
-    build:
-      context: .
-      dockerfile: services/graph-transformer-pipeline/Dockerfile
-    restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          memory: 4G
-    volumes:
-      - ./data:/app/data
-      - ./shared:/app/shared
-    environment:
-      - NATS_URL=nats://nats:4222
-    depends_on:
-      - nats
-      - dinov3-pipeline
-      - tracking-service
 
   ml-pipeline:
     build:
@@ -268,84 +354,6 @@ services:
       - nats
       - ml-pipeline
 
-  shap-service:
-    build:
-      context: .
-      dockerfile: services/shap-service/Dockerfile
-    volumes:
-      - ./data:/app/data
-      - ./shared:/app/shared
-    environment:
-      - NATS_URL=nats://nats:4222
-    depends_on:
-      - nats
-      - fusion-service
-
-  rater-reliability:
-    build:
-      context: .
-      dockerfile: services/rater-reliability/Dockerfile
-    volumes:
-      - ./data:/app/data
-      - ./shared:/app/shared
-    environment:
-      - NATS_URL=nats://nats:4222
-    depends_on:
-      - nats
-
-  llm-service:
-    build:
-      context: .
-      dockerfile: services/llm-service/Dockerfile
-    volumes:
-      - ./data:/app/data
-      - ./shared:/app/shared
-    environment:
-      - NATS_URL=nats://nats:4222
-      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
-      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o-mini}
-      - OLLAMA_HOST=${OLLAMA_HOST:-http://host.docker.internal:11434}
-      - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3.2}
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    depends_on:
-      - nats
-      - fusion-service
-
-  training-service:
-    build:
-      context: .
-      dockerfile: services/training-service/Dockerfile
-    restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          memory: 8G
-    volumes:
-      - ./data:/app/data
-      - ./shared:/app/shared
-    environment:
-      - NATS_URL=nats://nats:4222
-      - POSTGRES_URL=postgresql://lameness_user:lameness_pass@postgres:5432/lameness_db
-      - POSTGRES_PORT=5433
-    depends_on:
-      - nats
-      - postgres
-
-  annotation-renderer:
-    build:
-      context: .
-      dockerfile: services/annotation-renderer/Dockerfile
-    volumes:
-      - ./data:/app/data
-      - ./shared:/app/shared
-    environment:
-      - NATS_URL=nats://nats:4222
-    depends_on:
-      - nats
-    ports:
-      - "8002:8000"
-
   admin-backend:
     build:
       context: .
@@ -365,7 +373,6 @@ services:
       - POSTGRES_URL=postgresql://lameness_user:lameness_pass@postgres:5432/lameness_db
       - POSTGRES_PORT=5433
       - QDRANT_URL=http://qdrant:6333
-      # Storage backend: "local" for development, "s3" for AWS deployment
       - STORAGE_BACKEND=local
     depends_on:
       - nats
@@ -393,4 +400,3 @@ volumes:
   nats-data:
   postgres-data:
   qdrant-data:
-

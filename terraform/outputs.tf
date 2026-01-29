@@ -82,3 +82,14 @@ output "service_discovery_namespace" {
   description = "Service discovery namespace for internal DNS"
   value       = module.ecs.service_discovery_namespace
 }
+
+# Video Storage
+output "videos_bucket_name" {
+  description = "S3 bucket name for videos"
+  value       = module.storage.videos_bucket_name
+}
+
+output "cloudfront_domain_name" {
+  description = "CloudFront domain for video streaming"
+  value       = module.storage.cloudfront_domain_name
+}

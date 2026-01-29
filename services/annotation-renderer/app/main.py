@@ -5,6 +5,8 @@ Like in the research papers: T-LEAP, BiLSTM lameness detection
 """
 import asyncio
 import json
+import os
+import tempfile
 from pathlib import Path
 from typing import Dict, List, Any, Optional, Tuple
 import cv2
@@ -12,6 +14,16 @@ import numpy as np
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from pydantic import BaseModel
 import yaml
+import boto3
+from botocore.config import Config
+
+# AWS configuration
+AWS_REGION = os.getenv("AWS_REGION", "us-west-2")
+s3_client = boto3.client(
+    's3',
+    region_name=AWS_REGION,
+    config=Config(signature_version='s3v4')
+)
 
 app = FastAPI(title="Annotation Renderer Service")
 
@@ -300,6 +312,9 @@ class RenderRequest(BaseModel):
     show_confidence: bool = False
     show_labels: bool = True
     output_fps: Optional[float] = None
+    video_path: Optional[str] = None  # Local path or s3:// URI
+    s3_bucket: Optional[str] = None
+    s3_key: Optional[str] = None
 
 
 # Track rendering progress
@@ -611,26 +626,56 @@ def draw_info_overlay(
 async def render_annotated_video(request: RenderRequest):
     """Render annotated video with pose and/or YOLO detections."""
     video_id = request.video_id
-    
+    temp_video_file = None  # Track temp file for cleanup
+
     # Update status
     render_status[video_id] = {
         'status': 'starting',
         'progress': 0,
         'message': 'Loading data...'
     }
-    
+
     try:
-        # Find video file
-        video_files = list(VIDEOS_DIR.glob(f"{video_id}.*"))
-        if not video_files:
+        # Find video file - check S3 first, then local
+        video_path = None
+
+        if request.s3_bucket and request.s3_key:
+            # Download video from S3
             render_status[video_id] = {
-                'status': 'error',
+                'status': 'starting',
                 'progress': 0,
-                'message': 'Video file not found'
+                'message': 'Downloading video from S3...'
             }
-            return
-        
-        video_path = video_files[0]
+            print(f"📥 Downloading video from S3: s3://{request.s3_bucket}/{request.s3_key}")
+
+            # Get the file extension
+            ext = Path(request.s3_key).suffix or '.mp4'
+            temp_video_file = tempfile.NamedTemporaryFile(suffix=ext, delete=False)
+            temp_video_file.close()
+
+            try:
+                s3_client.download_file(request.s3_bucket, request.s3_key, temp_video_file.name)
+                video_path = Path(temp_video_file.name)
+                print(f"✅ Downloaded video to {temp_video_file.name}")
+            except Exception as e:
+                print(f"❌ Failed to download from S3: {e}")
+                render_status[video_id] = {
+                    'status': 'error',
+                    'progress': 0,
+                    'message': f'Failed to download video from S3: {e}'
+                }
+                return
+        else:
+            # Check local filesystem
+            video_files = list(VIDEOS_DIR.glob(f"{video_id}.*"))
+            if not video_files:
+                render_status[video_id] = {
+                    'status': 'error',
+                    'progress': 0,
+                    'message': 'Video file not found'
+                }
+                return
+            video_path = video_files[0]
         
         # Load YOLO results
         yolo_data = None
@@ -793,7 +838,7 @@ async def render_annotated_video(request: RenderRequest):
         }
         
         print(f"✅ Rendered annotated video: {output_path}")
-        
+
     except Exception as e:
         print(f"❌ Error rendering video {video_id}: {e}")
         import traceback
@@ -803,6 +848,15 @@ async def render_annotated_video(request: RenderRequest):
             'progress': 0,
             'message': str(e)
         }
+
+    finally:
+        # Clean up temp file if we downloaded from S3
+        if temp_video_file and os.path.exists(temp_video_file.name):
+            try:
+                os.unlink(temp_video_file.name)
+                print(f"🗑️ Cleaned up temp file: {temp_video_file.name}")
+            except Exception as e:
+                print(f"⚠️ Failed to clean up temp file: {e}")
 
 
 @app.get("/health")
