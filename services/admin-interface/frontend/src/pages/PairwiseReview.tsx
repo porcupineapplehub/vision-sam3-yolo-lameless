@@ -1,6 +1,8 @@
 import { useEffect, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { videosApi, eloRankingApi, tutorialApi, TutorialExample } from '@/api/client'
+import { useLanguage } from '@/contexts/LanguageContext'
+import { getRandomDemoPair, type DemoPair } from '@/utils/demoData'
 
 interface VideoPair {
   video_id_1: string
@@ -24,6 +26,7 @@ const COMPARISON_SCALE = [
 
 export default function PairwiseReview() {
   const navigate = useNavigate()
+  const { t } = useLanguage()
   const [pair, setPair] = useState<VideoPair | null>(null)
   const [stats, setStats] = useState<any>(null)
   const [ranking, setRanking] = useState<any>(null)
@@ -47,6 +50,11 @@ export default function PairwiseReview() {
   const video1Ref = useRef<HTMLVideoElement>(null)
   const video2Ref = useRef<HTMLVideoElement>(null)
   const [isPlaying, setIsPlaying] = useState(false)
+  
+  // Demo mode
+  const [demoMode, setDemoMode] = useState(false)
+  const [demoPair, setDemoPair] = useState<DemoPair | null>(null)
+  const [demoIndex, setDemoIndex] = useState(0)
 
   useEffect(() => {
     // Check if user has completed tutorial
@@ -88,6 +96,18 @@ export default function PairwiseReview() {
     setLoading(true)
     setSelectedValue(null)
     setIsPlaying(false)
+    
+    if (demoMode) {
+      // Load demo data
+      const nextPair = getRandomDemoPair()
+      if (nextPair) {
+        setDemoPair(nextPair)
+        setDemoIndex(prev => prev + 1)
+      }
+      setLoading(false)
+      return
+    }
+    
     try {
       // Use Elo API for intelligent pair selection
       const data = await eloRankingApi.getNextPair()
@@ -97,6 +117,19 @@ export default function PairwiseReview() {
     } finally {
       setLoading(false)
     }
+  }
+  
+  const enableDemoMode = () => {
+    setDemoMode(true)
+    setInTutorial(false)
+    setTutorialLoading(false)
+    localStorage.setItem('pairwise_tutorial_complete', 'true')
+    const firstPair = getRandomDemoPair()
+    if (firstPair) {
+      setDemoPair(firstPair)
+      setDemoIndex(0)
+    }
+    setLoading(false)
   }
 
   const loadStats = async () => {
@@ -315,7 +348,7 @@ export default function PairwiseReview() {
           {/* Tutorial videos - actual videos from API */}
           <div className="grid grid-cols-2 gap-4 my-6">
             <div className="space-y-2">
-              <div className="text-center font-medium text-muted-foreground">Video A</div>
+              <div className="text-center font-medium text-muted-foreground">Left Cow</div>
               <div className="aspect-video bg-black rounded-lg overflow-hidden">
                 <video
                   src={videosApi.getStreamUrl(currentExample.video_id_1)}
@@ -328,7 +361,7 @@ export default function PairwiseReview() {
               </div>
             </div>
             <div className="space-y-2">
-              <div className="text-center font-medium text-muted-foreground">Video B</div>
+              <div className="text-center font-medium text-muted-foreground">Right Cow</div>
               <div className="aspect-video bg-black rounded-lg overflow-hidden">
                 <video
                   src={videosApi.getStreamUrl(currentExample.video_id_2)}
@@ -342,25 +375,52 @@ export default function PairwiseReview() {
             </div>
           </div>
 
-          {/* 7-Point Scale */}
-          <div className="space-y-3">
-            <label className="block text-sm font-medium text-muted-foreground">
-              Select your comparison (1-7 keys work too):
+          {/* 7-Point Scale - Circular Buttons */}
+          <div className="space-y-2">
+            <label className="block text-center font-medium text-muted-foreground text-sm">
+              Select the option that best describes the lameness difference
             </label>
-            <div className="flex gap-2 flex-wrap justify-center">
-              {COMPARISON_SCALE.map((option, idx) => (
-                <button
-                  key={option.value}
-                  onClick={() => setSelectedValue(option.value)}
-                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
-                    selectedValue === option.value
-                      ? `${option.color} text-white ring-2 ring-offset-2 ring-primary`
-                      : 'bg-muted hover:bg-accent text-foreground'
-                  }`}
-                >
-                  <span className="text-xs opacity-60">{idx + 1}</span> {option.label}
-                </button>
-              ))}
+            <div className="flex items-center justify-center gap-8 py-3">
+              {COMPARISON_SCALE.map((option, idx) => {
+                // Smaller sizes
+                const sizeClass = 
+                  idx === 0 || idx === 6 ? 'w-12 h-12' :  // Large outer
+                  idx === 1 || idx === 5 ? 'w-10 h-10' :  // Medium-large
+                  idx === 2 || idx === 4 ? 'w-9 h-9' :    // Medium
+                  'w-7 h-7';                               // Small (center)
+                
+                // Softer, less bright colors
+                const colorClass = 
+                  selectedValue === option.value
+                    ? option.value < 0 ? 'bg-blue-600 border-blue-700' :
+                      option.value > 0 ? 'bg-orange-600 border-orange-700' :
+                      'bg-gray-500 border-gray-600'
+                    : option.value < 0 ? 'bg-blue-500/50 hover:bg-blue-500/70 border-blue-500/60' :
+                      option.value > 0 ? 'bg-orange-500/50 hover:bg-orange-500/70 border-orange-500/60' :
+                      'bg-gray-400/40 hover:bg-gray-400/60 border-gray-400/50';
+
+                // Text label for outer buttons
+                const showText = idx === 0 || idx === 6;
+                const labelText = idx === 0 ? 'Left more lame' : idx === 6 ? 'Right more lame' : '';
+
+                return (
+                  <div key={option.value} className="flex flex-col items-center gap-1 flex-shrink-0">
+                    <span className={`text-[10px] mb-0.5 h-3 ${showText ? 'text-muted-foreground' : 'invisible'}`}>
+                      {showText ? labelText : 'placeholder'}
+                    </span>
+                    <button
+                      onClick={() => setSelectedValue(option.value)}
+                      className={`rounded-full ${sizeClass} ${colorClass} border-2 transition-all flex-shrink-0 ${
+                        selectedValue === option.value ? 'ring-2 ring-offset-2 ring-primary scale-110' : ''
+                      }`}
+                      title={option.label}
+                      style={{ aspectRatio: '1 / 1' }}
+                    >
+                      <span className="sr-only">{option.label}</span>
+                    </button>
+                  </div>
+                )
+              })}
             </div>
           </div>
 
@@ -400,7 +460,7 @@ export default function PairwiseReview() {
         </div>
 
         <div className="flex justify-between items-center text-sm text-muted-foreground">
-          <div>Score: {tutorialScore}/{tutorialStep + (showTutorialFeedback ? 1 : 0)}</div>
+          <div>{t('tutorial.score')} {tutorialScore}/{tutorialStep + (showTutorialFeedback ? 1 : 0)}</div>
           <button
             onClick={() => {
               localStorage.setItem('pairwise_tutorial_complete', 'true')
@@ -409,7 +469,7 @@ export default function PairwiseReview() {
             }}
             className="text-primary hover:text-primary/80 underline"
           >
-            Skip Tutorial
+            {t('pairwise.skipTutorial')}
           </button>
         </div>
       </div>
@@ -421,7 +481,7 @@ export default function PairwiseReview() {
       <div className="flex items-center justify-center h-64">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-          <div className="text-muted-foreground">Loading video pair...</div>
+          <div className="text-muted-foreground">{t('pairwise.loading')}</div>
         </div>
       </div>
     )
@@ -431,59 +491,69 @@ export default function PairwiseReview() {
     return (
       <div className="text-center py-12">
         <div className="text-6xl mb-4">🎉</div>
-        <h2 className="text-3xl font-bold mb-4">All Comparisons Complete!</h2>
+        <h2 className="text-3xl font-bold mb-4">{t('pairwise.allComplete')}</h2>
         <p className="text-muted-foreground mb-8">
-          You've completed all {pair.total_pairs} pairwise comparisons.
+          {t('pairwise.allCompleteMsg')}
         </p>
         <button
           onClick={() => setShowRanking(true)}
           className="px-6 py-3 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90"
         >
-          View Lameness Ranking
+          {t('pairwise.showRanking')}
         </button>
       </div>
     )
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-3xl font-bold">Pairwise Comparison</h2>
-          <p className="text-muted-foreground mt-1">
-            Compare videos using a 7-point scale to build a lameness hierarchy
+          <h2 className="text-2xl font-bold">{t('pairwise.title')}</h2>
+          <p className="text-muted-foreground text-sm mt-1">
+            {t('pairwise.subtitle')}
           </p>
+          {demoMode && (
+            <div className="mt-2">
+              <span className="px-3 py-1 bg-warning/20 text-warning rounded-full text-xs font-medium">
+                🎯 Demo Mode - Using demo_cows.csv data
+              </span>
+            </div>
+          )}
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3 text-sm">
+          {!demoMode && (
+            <button
+              onClick={enableDemoMode}
+              className="px-3 py-1.5 border border-primary text-primary rounded-lg hover:bg-primary/10"
+            >
+              Load Demo Data
+            </button>
+          )}
           {stats && (
-            <div className="text-sm text-muted-foreground">
-              Progress: {stats.unique_pairs_compared} / {stats.total_possible_pairs} pairs
+            <div className="text-muted-foreground">
+              {t('common.progress')} {stats.unique_pairs_compared} / {stats.total_possible_pairs} {t('common.pairs')}
               ({(stats.completion_rate * 100).toFixed(1)}%)
             </div>
           )}
           <button
             onClick={() => setShowRanking(!showRanking)}
-            className="px-4 py-2 border rounded-lg hover:bg-accent"
+            className="px-3 py-1.5 border rounded-lg hover:bg-accent"
           >
-            {showRanking ? 'Hide Ranking' : 'Show Ranking'}
+            {t('pairwise.showRanking')}
           </button>
           <button
             onClick={generateShareUrl}
-            className="px-4 py-2 border rounded-lg hover:bg-accent"
+            className="px-3 py-1.5 border rounded-lg hover:bg-accent"
           >
-            Share
+            {t('pairwise.share')}
           </button>
           <button
-            onClick={() => {
-              localStorage.removeItem('pairwise_tutorial_complete')
-              setInTutorial(true)
-              setTutorialStep(0)
-              setTutorialScore(0)
-            }}
-            className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground"
+            onClick={() => navigate('/learn')}
+            className="px-3 py-1.5 text-muted-foreground hover:text-foreground"
           >
-            Retake Tutorial
+            Tutorial
           </button>
         </div>
       </div>
@@ -557,90 +627,120 @@ export default function PairwiseReview() {
       )}
 
       {/* Main Comparison Area */}
-      {pair && (
+      {(pair || demoPair) && (
         <>
           {/* Videos Side by Side */}
-          <div className="grid grid-cols-2 gap-6">
-            {/* Video A */}
-            <div className="space-y-2">
-              <div className="text-center font-semibold text-lg">Video A</div>
+          <div className="grid grid-cols-2 gap-4">
+            {/* Left Cow */}
+            <div className="space-y-1">
+              <div className="text-center font-semibold">{t('pairwise.leftCow')}</div>
               <div className={`border-4 rounded-lg overflow-hidden transition-colors ${
                 selectedValue !== null && selectedValue < 0 ? 'border-red-500' : 'border-transparent'
               }`}>
                 <video
                   ref={video1Ref}
-                  src={videosApi.getStreamUrl(pair.video_id_1)}
+                  src={demoMode && demoPair ? demoPair.cow_L_URL : pair ? videosApi.getStreamUrl(pair.video_id_1) : ''}
                   className="w-full aspect-video bg-black"
                   loop
                   muted
+                  playsInline
+                  controls
                 />
               </div>
             </div>
 
-            {/* Video B */}
-            <div className="space-y-2">
-              <div className="text-center font-semibold text-lg">Video B</div>
+            {/* Right Cow */}
+            <div className="space-y-1">
+              <div className="text-center font-semibold">{t('pairwise.rightCow')}</div>
               <div className={`border-4 rounded-lg overflow-hidden transition-colors ${
                 selectedValue !== null && selectedValue > 0 ? 'border-orange-500' : 'border-transparent'
               }`}>
                 <video
                   ref={video2Ref}
-                  src={videosApi.getStreamUrl(pair.video_id_2)}
+                  src={demoMode && demoPair ? demoPair.cow_R_URL : pair ? videosApi.getStreamUrl(pair.video_id_2) : ''}
                   className="w-full aspect-video bg-black"
                   loop
                   muted
+                  playsInline
+                  controls
                 />
               </div>
             </div>
           </div>
 
           {/* Playback Controls */}
-          <div className="flex justify-center gap-4">
-            <button
-              onClick={restartVideos}
-              className="px-6 py-2 border border-border rounded-lg hover:bg-accent"
-            >
-              ↺ Restart
-            </button>
+          <div className="flex justify-center gap-3">
             <button
               onClick={togglePlayback}
-              className="px-6 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90"
+              className="px-5 py-1.5 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 text-sm"
             >
-              {isPlaying ? '⏸ Pause' : '▶ Play'}
+              {isPlaying ? `⏸ ${t('pairwise.pause')}` : `▶ ${t('pairwise.play')}`}
+            </button>
+            <button
+              onClick={restartVideos}
+              className="px-5 py-1.5 border border-border rounded-lg hover:bg-accent text-sm"
+            >
+              ↺ {t('pairwise.restart')}
             </button>
           </div>
 
-          {/* 7-Point Comparison Scale */}
-          <div className="space-y-4">
-            <label className="block text-center font-medium text-foreground">
-              Which cow appears more lame? (Keys 1-7)
+          {/* 7-Point Comparison Scale - Circular Buttons */}
+          <div className="space-y-2">
+            <label className="block text-center font-medium text-foreground text-sm">
+              {t('pairwise.selectOption')}
             </label>
-            <div className="flex gap-2 flex-wrap justify-center">
-              {COMPARISON_SCALE.map((option, idx) => (
-                <button
-                  key={option.value}
-                  onClick={() => setSelectedValue(option.value)}
-                  className={`px-4 py-3 rounded-lg text-sm font-medium transition-all flex-1 min-w-[120px] max-w-[160px] ${
-                    selectedValue === option.value
-                      ? `${option.color} text-white ring-2 ring-offset-2 ring-primary scale-105`
-                      : 'bg-muted hover:bg-accent text-foreground'
-                  }`}
-                >
-                  <div className="text-xs opacity-60 mb-1">Press {idx + 1}</div>
-                  {option.label}
-                </button>
-              ))}
+            <div className="flex items-center justify-center gap-10 py-3">
+              {COMPARISON_SCALE.map((option, idx) => {
+                // Smaller sizes with better spacing
+                const sizeClass = 
+                  idx === 0 || idx === 6 ? 'w-14 h-14' :  // Large outer
+                  idx === 1 || idx === 5 ? 'w-12 h-12' :  // Medium-large
+                  idx === 2 || idx === 4 ? 'w-10 h-10' :  // Medium
+                  'w-8 h-8';                               // Small (center)
+                
+                // Softer, less bright colors
+                const colorClass = 
+                  selectedValue === option.value
+                    ? option.value < 0 ? 'bg-blue-600 border-blue-700' :
+                      option.value > 0 ? 'bg-orange-600 border-orange-700' :
+                      'bg-gray-500 border-gray-600'
+                    : option.value < 0 ? 'bg-blue-500/50 hover:bg-blue-500/70 border-blue-500/60' :
+                      option.value > 0 ? 'bg-orange-500/50 hover:bg-orange-500/70 border-orange-500/60' :
+                      'bg-gray-400/40 hover:bg-gray-400/60 border-gray-400/50';
+
+                // Text label for outer buttons
+                const showText = idx === 0 || idx === 6;
+                const labelText = idx === 0 ? t('pairwise.leftMoreLame') : idx === 6 ? t('pairwise.rightMoreLame') : '';
+
+                return (
+                  <div key={option.value} className="flex flex-col items-center gap-1 flex-shrink-0">
+                    <span className={`text-xs mb-1 h-4 ${showText ? 'text-muted-foreground' : 'invisible'}`}>
+                      {showText ? labelText : 'placeholder'}
+                    </span>
+                    <button
+                      onClick={() => setSelectedValue(option.value)}
+                      className={`rounded-full ${sizeClass} ${colorClass} border-2 transition-all flex-shrink-0 ${
+                        selectedValue === option.value ? 'ring-3 ring-offset-2 ring-primary scale-110' : ''
+                      }`}
+                      title={option.label}
+                      style={{ aspectRatio: '1 / 1' }}
+                    >
+                      <span className="sr-only">{option.label}</span>
+                    </button>
+                  </div>
+                )
+              })}
             </div>
           </div>
 
           {/* Submit Button */}
-          <div className="flex justify-center">
+          <div className="flex justify-center mt-3">
             <button
               onClick={handleSubmit}
               disabled={selectedValue === null || submitting}
-              className="px-8 py-3 bg-success text-white rounded-lg font-medium hover:bg-success/90 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-8 py-2 bg-success text-white rounded-lg font-medium hover:bg-success/90 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {submitting ? 'Submitting...' : 'Submit & Next Pair (Enter)'}
+              {submitting ? t('pairwise.submitting') : t('pairwise.submit')}
             </button>
           </div>
 

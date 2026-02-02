@@ -1,6 +1,7 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
 import { AuthProvider } from './contexts/AuthContext'
 import { ThemeProvider } from './contexts/ThemeContext'
+import { LanguageProvider } from './contexts/LanguageContext'
 import { ProtectedRoute, ResearcherRoute, AdminRoute } from './components/ProtectedRoute'
 import Layout from './components/Layout'
 import Dashboard from './pages/Dashboard'
@@ -12,6 +13,7 @@ import TripletComparison from './pages/TripletComparison'
 import HierarchyVisualization from './pages/HierarchyVisualization'
 import SimilarityMap from './pages/SimilarityMap'
 import TrainingModule from './pages/TrainingModule'
+import Performance from './pages/Performance'
 import Login from './pages/Login'
 import PipelineMonitor from './pages/PipelineMonitor'
 import SystemHealth from './pages/SystemHealth'
@@ -27,8 +29,9 @@ import CowDetail from './pages/CowDetail'
 function App() {
   return (
     <ThemeProvider>
-      <AuthProvider>
-        <Router>
+      <LanguageProvider>
+        <AuthProvider>
+          <Router>
           <Routes>
             {/* Public route */}
             <Route path="/login" element={<Login />} />
@@ -71,6 +74,7 @@ function App() {
                     {/* Analytics - all authenticated users */}
                     <Route path="/hierarchy" element={<HierarchyVisualization />} />
                     <Route path="/similarity" element={<SimilarityMap />} />
+                    <Route path="/performance" element={<Performance />} />
                     <Route path="/learn" element={<TrainingModule />} />
 
                     {/* Cow Registry - all authenticated users */}
@@ -138,8 +142,9 @@ function App() {
               }
             />
           </Routes>
-        </Router>
-      </AuthProvider>
+          </Router>
+        </AuthProvider>
+      </LanguageProvider>
     </ThemeProvider>
   )
 }

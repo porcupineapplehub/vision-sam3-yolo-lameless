@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { cowsApi, CowIdentity } from '@/api/client'
 import { cn } from '@/lib/utils'
 import { Beef, Search, RefreshCw, Loader2, ChevronLeft, ChevronRight, Activity } from 'lucide-react'
+import { getDemoCows } from '@/utils/demoData'
 
 interface SeverityStats {
   healthy: number
@@ -25,6 +26,7 @@ export default function CowList() {
   const [stats, setStats] = useState<CowStats | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [demoMode, setDemoMode] = useState(false)
   
   // Filters
   const [severityFilter, setSeverityFilter] = useState<string>('')
@@ -40,7 +42,70 @@ export default function CowList() {
     loadData()
   }, [severityFilter, activeFilter, skip])
 
+  const loadDemoData = () => {
+    setDemoMode(true)
+    const demoCows = getDemoCows()
+    
+    // Generate random data for demo cows
+    const tags = ['#A101', '#B205', '#C330', '#D412', '#E508', '#F621', '#G734', '#H845']
+    const now = Date.now()
+    const oneDay = 24 * 60 * 60 * 1000
+    
+    const mockCows: CowIdentity[] = demoCows.map((dc, idx) => {
+      const daysAgo = Math.floor(Math.random() * 30) // Random days ago (0-30)
+      const lastSeen = new Date(now - (daysAgo * oneDay)).toISOString()
+      const firstSeen = new Date(now - ((daysAgo + 60) * oneDay)).toISOString()
+      const numVideos = Math.floor(Math.random() * 50) + 1 // Random 1-50
+      
+      // Generate severity score based on severity level
+      let score = 0
+      if (dc.severity === 'healthy') score = Math.random() * 1.5  // 0-1.5
+      else if (dc.severity === 'mild') score = 1.5 + Math.random() * 1.0  // 1.5-2.5
+      else if (dc.severity === 'moderate') score = 2.5 + Math.random() * 1.0  // 2.5-3.5
+      else if (dc.severity === 'severe') score = 3.5 + Math.random() * 1.5  // 3.5-5.0
+      
+      return {
+        id: dc.id,
+        cow_id: dc.id,
+        tag_number: tags[Math.floor(Math.random() * tags.length)],
+        total_sightings: numVideos,
+        first_seen: firstSeen,
+        last_seen: lastSeen,
+        is_active: Math.random() > 0.1, // 90% active
+        notes: 'Demo cow from demo_cows.csv',
+        current_score: parseFloat(score.toFixed(2)),
+        severity_level: dc.severity,
+        num_videos: numVideos
+      }
+    })
+    
+    // Calculate severity distribution
+    const distribution = {
+      healthy: mockCows.filter(c => c.severity_level === 'healthy').length,
+      mild: mockCows.filter(c => c.severity_level === 'mild').length,
+      moderate: mockCows.filter(c => c.severity_level === 'moderate').length,
+      severe: mockCows.filter(c => c.severity_level === 'severe').length,
+      unknown: mockCows.filter(c => !c.severity_level || c.severity_level === 'unknown').length
+    }
+    
+    setCows(mockCows)
+    setTotal(mockCows.length)
+    setStats({
+      total_cows: mockCows.length,
+      active_cows: mockCows.filter(c => c.is_active).length,
+      total_videos_tracked: mockCows.reduce((sum, c) => sum + c.num_videos!, 0),
+      total_lameness_records: mockCows.length,
+      severity_distribution: distribution
+    })
+    setLoading(false)
+  }
+  
   const loadData = async () => {
+    if (demoMode) {
+      loadDemoData()
+      return
+    }
+    
     try {
       setLoading(true)
       
@@ -121,14 +186,31 @@ export default function CowList() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center gap-4 animate-slide-in-up">
-        <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center shadow-lg shadow-primary/20">
-          <Beef className="h-6 w-6 text-primary-foreground" />
+      <div className="flex items-center justify-between animate-slide-in-up">
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center shadow-lg shadow-primary/20">
+            <Beef className="h-6 w-6 text-primary-foreground" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold">Cow Registry</h1>
+            <p className="text-muted-foreground">Track and monitor individual cows across video analyses</p>
+            {demoMode && (
+              <div className="mt-1">
+                <span className="px-2 py-0.5 bg-warning/20 text-warning rounded-full text-xs font-medium">
+                  🎯 Demo Mode - Using demo_cows.csv data
+                </span>
+              </div>
+            )}
+          </div>
         </div>
-        <div>
-          <h1 className="text-2xl font-bold">Cow Registry</h1>
-          <p className="text-muted-foreground">Track and monitor individual cows across video analyses</p>
-        </div>
+        {!demoMode && (
+          <button
+            onClick={loadDemoData}
+            className="px-4 py-2 border border-primary text-primary rounded-lg hover:bg-primary/10"
+          >
+            Load Demo Data
+          </button>
+        )}
       </div>
 
       {/* Stats Cards */}
