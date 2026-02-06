@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { videosApi, eloRankingApi, tutorialApi, TutorialExample } from '@/api/client'
 import { useLanguage } from '@/contexts/LanguageContext'
-import { getRandomDemoPair, type DemoPair } from '@/utils/demoData'
+import { getRandomDemoPair, parseDemoCSV, type DemoPair } from '@/utils/demoData'
 
 interface VideoPair {
   video_id_1: string
@@ -55,6 +55,8 @@ export default function PairwiseReview() {
   const [demoMode, setDemoMode] = useState(false)
   const [demoPair, setDemoPair] = useState<DemoPair | null>(null)
   const [demoIndex, setDemoIndex] = useState(0)
+  const [demoPairs, setDemoPairs] = useState<DemoPair[]>([])
+  const [showDemoComplete, setShowDemoComplete] = useState(false)
 
   useEffect(() => {
     // Check if user has completed tutorial
@@ -98,11 +100,11 @@ export default function PairwiseReview() {
     setIsPlaying(false)
     
     if (demoMode) {
-      // Load demo data
-      const nextPair = getRandomDemoPair()
-      if (nextPair) {
-        setDemoPair(nextPair)
-        setDemoIndex(prev => prev + 1)
+      // Load next demo pair (max 3 pairs)
+      const nextIndex = demoIndex + 1
+      if (nextIndex < demoPairs.length) {
+        setDemoPair(demoPairs[nextIndex])
+        setDemoIndex(nextIndex)
       }
       setLoading(false)
       return
@@ -124,11 +126,14 @@ export default function PairwiseReview() {
     setInTutorial(false)
     setTutorialLoading(false)
     localStorage.setItem('pairwise_tutorial_complete', 'true')
-    const firstPair = getRandomDemoPair()
-    if (firstPair) {
-      setDemoPair(firstPair)
-      setDemoIndex(0)
-    }
+    
+    // Get first 3 demo pairs
+    const allPairs = parseDemoCSV()
+    const firstThree = allPairs.slice(0, 3)
+    setDemoPairs(firstThree)
+    setDemoPair(firstThree[0])
+    setDemoIndex(0)
+    setShowDemoComplete(false)
     setLoading(false)
   }
 
@@ -174,9 +179,26 @@ export default function PairwiseReview() {
   }
 
   const handleSubmit = async () => {
-    if (!pair || selectedValue === null) return
+    if ((!pair && !demoMode) || selectedValue === null) return
 
     setSubmitting(true)
+    
+    if (demoMode) {
+      // Demo mode submission
+      const isLastPair = demoIndex === demoPairs.length - 1
+      
+      if (isLastPair) {
+        // Show success with confetti
+        setShowDemoComplete(true)
+        setSubmitting(false)
+      } else {
+        // Move to next pair
+        await loadNextPair()
+        setSubmitting(false)
+      }
+      return
+    }
+    
     try {
       // Convert 7-point scale to winner format and degree for Elo API
       let winner: number
@@ -201,8 +223,8 @@ export default function PairwiseReview() {
 
       // Submit to Elo ranking system with degree of preference
       await eloRankingApi.submitComparison(
-        pair.video_id_1,
-        pair.video_id_2,
+        pair!.video_id_1,
+        pair!.video_id_2,
         winner,
         degree,
         confidence,
@@ -487,7 +509,62 @@ export default function PairwiseReview() {
     )
   }
 
-  if (pair?.status === 'all_completed') {
+  if (showDemoComplete) {
+    return (
+      <div className="text-center py-12 relative">
+        {/* Confetti effect */}
+        <div className="absolute inset-0 pointer-events-none overflow-hidden">
+          {[...Array(50)].map((_, i) => (
+            <div
+              key={i}
+              className="absolute animate-confetti"
+              style={{
+                left: `${Math.random() * 100}%`,
+                top: `-20px`,
+                animationDelay: `${Math.random() * 2}s`,
+                animationDuration: `${2 + Math.random() * 2}s`
+              }}
+            >
+              {['🎉', '🎊', '✨', '⭐', '🌟'][Math.floor(Math.random() * 5)]}
+            </div>
+          ))}
+        </div>
+        
+        <div className="relative z-10">
+          <div className="text-6xl mb-4 animate-bounce">🎉</div>
+          <h2 className="text-3xl font-bold mb-4">Successfully Submitted!</h2>
+          <p className="text-muted-foreground mb-8">
+            You've completed all 3 demo comparisons. Great work!
+          </p>
+          <div className="flex gap-4 justify-center">
+            <button
+              onClick={() => {
+                setShowDemoComplete(false)
+                setDemoMode(false)
+                setDemoIndex(0)
+                setDemoPairs([])
+                setDemoPair(null)
+              }}
+              className="px-6 py-3 border border-primary text-primary rounded-lg hover:bg-primary/10"
+            >
+              Exit Demo
+            </button>
+            <button
+              onClick={() => {
+                setShowDemoComplete(false)
+                enableDemoMode()
+              }}
+              className="px-6 py-3 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90"
+            >
+              Try Again
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (pair?.status === 'all_completed' && !demoMode) {
     return (
       <div className="text-center py-12">
         <div className="text-6xl mb-4">🎉</div>
@@ -495,12 +572,20 @@ export default function PairwiseReview() {
         <p className="text-muted-foreground mb-8">
           {t('pairwise.allCompleteMsg')}
         </p>
-        <button
-          onClick={() => setShowRanking(true)}
-          className="px-6 py-3 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90"
-        >
-          {t('pairwise.showRanking')}
-        </button>
+        <div className="flex gap-4 justify-center">
+          <button
+            onClick={() => setShowRanking(true)}
+            className="px-6 py-3 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90"
+          >
+            {t('pairwise.showRanking')}
+          </button>
+          <button
+            onClick={enableDemoMode}
+            className="px-6 py-3 border border-primary text-primary rounded-lg hover:bg-primary/10"
+          >
+            Load Demo Data
+          </button>
+        </div>
       </div>
     )
   }
@@ -740,7 +825,7 @@ export default function PairwiseReview() {
               disabled={selectedValue === null || submitting}
               className="px-8 py-2 bg-success text-white rounded-lg font-medium hover:bg-success/90 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {submitting ? t('pairwise.submitting') : t('pairwise.submit')}
+              {submitting ? 'Loading...' : demoMode && demoIndex < demoPairs.length - 1 ? 'Next' : demoMode ? 'Submit' : t('pairwise.submit')}
             </button>
           </div>
 

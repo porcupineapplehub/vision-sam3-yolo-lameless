@@ -57,12 +57,12 @@ export default function CowList() {
       const firstSeen = new Date(now - ((daysAgo + 60) * oneDay)).toISOString()
       const numVideos = Math.floor(Math.random() * 50) + 1 // Random 1-50
       
-      // Generate severity score based on severity level
+      // Generate severity score based on severity level (0-1 scale)
       let score = 0
-      if (dc.severity === 'healthy') score = Math.random() * 1.5  // 0-1.5
-      else if (dc.severity === 'mild') score = 1.5 + Math.random() * 1.0  // 1.5-2.5
-      else if (dc.severity === 'moderate') score = 2.5 + Math.random() * 1.0  // 2.5-3.5
-      else if (dc.severity === 'severe') score = 3.5 + Math.random() * 1.5  // 3.5-5.0
+      if (dc.severity === 'healthy') score = Math.random() * 0.3  // 0-30%
+      else if (dc.severity === 'mild') score = 0.3 + Math.random() * 0.2  // 30-50%
+      else if (dc.severity === 'moderate') score = 0.5 + Math.random() * 0.25  // 50-75%
+      else if (dc.severity === 'severe') score = 0.75 + Math.random() * 0.25  // 75-100%
       
       return {
         id: dc.id,
