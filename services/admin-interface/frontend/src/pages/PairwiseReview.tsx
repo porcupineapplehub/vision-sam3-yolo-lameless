@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { videosApi, eloRankingApi, tutorialApi, TutorialExample } from '@/api/client'
 import { useLanguage } from '@/contexts/LanguageContext'
-import { getRandomDemoPair, parseDemoCSV, type DemoPair } from '@/utils/demoData'
+import { getRandomDemoPair, parseDemoCSV, resetDemoCache, type DemoPair } from '@/utils/demoData'
 
 interface VideoPair {
   video_id_1: string
@@ -97,7 +97,7 @@ export default function PairwiseReview() {
   const loadNextPair = async () => {
     setLoading(true)
     setSelectedValue(null)
-    setIsPlaying(false)
+    setIsPlaying(demoMode) // Auto-playing in demo mode
     
     if (demoMode) {
       // Load next demo pair (max 3 pairs)
@@ -127,13 +127,24 @@ export default function PairwiseReview() {
     setTutorialLoading(false)
     localStorage.setItem('pairwise_tutorial_complete', 'true')
     
-    // Get first 3 demo pairs
+    // Clear cache and get fresh demo pairs (first 3)
+    resetDemoCache()
     const allPairs = parseDemoCSV()
+    
+    // Verify the pairs
+    console.log('=== DEMO PAIRS ORDER ===')
+    allPairs.slice(0, 5).forEach((p, i) => {
+      console.log(`Pair ${i + 1}: ${p.cow_L} vs ${p.cow_R}`)
+    })
+    
     const firstThree = allPairs.slice(0, 3)
+    console.log('Setting demo pairs:', firstThree.map(p => `${p.cow_L} vs ${p.cow_R}`))
+    
     setDemoPairs(firstThree)
     setDemoPair(firstThree[0])
     setDemoIndex(0)
     setShowDemoComplete(false)
+    setIsPlaying(true) // Auto-play in demo mode
     setLoading(false)
   }
 
@@ -730,6 +741,7 @@ export default function PairwiseReview() {
                   muted
                   playsInline
                   controls
+                  autoPlay={demoMode}
                 />
               </div>
             </div>
@@ -748,6 +760,7 @@ export default function PairwiseReview() {
                   muted
                   playsInline
                   controls
+                  autoPlay={demoMode}
                 />
               </div>
             </div>
@@ -795,7 +808,7 @@ export default function PairwiseReview() {
 
                 // Text label for outer buttons
                 const showText = idx === 0 || idx === 6;
-                const labelText = idx === 0 ? t('pairwise.leftMoreLame') : idx === 6 ? t('pairwise.rightMoreLame') : '';
+                const labelText = idx === 0 ? 'Left cow much more lame' : idx === 6 ? 'Right cow much more lame' : '';
 
                 return (
                   <div key={option.value} className="flex flex-col items-center gap-1 flex-shrink-0">

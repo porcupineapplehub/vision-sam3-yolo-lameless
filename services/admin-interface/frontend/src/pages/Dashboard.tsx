@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { cn } from '@/lib/utils'
 import { videosApi, trainingApi } from '@/api/client'
+import { getDemoCows } from '@/utils/demoData'
 import {
   TrendingUp,
   TrendingDown,
@@ -33,12 +34,18 @@ export default function Dashboard() {
   const [trainingStatus, setTrainingStatus] = useState<any>(null)
   const [pairwiseStats, setPairwiseStats] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  const [demoMode, setDemoMode] = useState(false)
 
   useEffect(() => {
     loadData()
-  }, [])
+  }, [demoMode])
 
   const loadData = async () => {
+    if (demoMode) {
+      loadDemoData()
+      return
+    }
+    
     try {
       const [videoData, statsData, statusData, pairwiseData] = await Promise.all([
         videosApi.list(0, 1000),
@@ -55,6 +62,37 @@ export default function Dashboard() {
     } finally {
       setLoading(false)
     }
+  }
+
+  const loadDemoData = () => {
+    const demoCows = getDemoCows()
+    
+    // Create demo videos from demo cows
+    const demoVideos = demoCows.map((cow, idx) => ({
+      video_id: cow.id,
+      filename: `cow_${cow.id}_demo.mp4`,
+      file_size: Math.floor(Math.random() * 50 + 10) * 1024 * 1024, // 10-60 MB
+      has_analysis: idx < 8,
+      has_annotated: idx < 6,
+      has_label: idx < 9,
+      label: cow.severity === 'severe' || cow.severity === 'moderate' ? 1 : 0,
+      storage_backend: 's3',
+      s3_url: cow.videoUrl
+    }))
+    
+    setVideos(demoVideos)
+    setPairwiseStats({
+      pairs_compared: 15,
+      total_possible_pairs: 66,
+      completion_rate: 0.23,
+      total_comparisons: 15
+    })
+    setTrainingStatus({
+      status: 'completed',
+      last_trained: new Date().toISOString(),
+      samples_used: 42
+    })
+    setLoading(false)
   }
 
   if (loading) {
@@ -148,21 +186,39 @@ export default function Dashboard() {
             Dashboard
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-primary/10 text-primary text-sm font-medium">
               <Sparkles className="h-3.5 w-3.5" />
-              Live
+              {demoMode ? 'Demo' : 'Live'}
             </span>
           </h1>
           <p className="text-muted-foreground mt-1">
             Overview of your lameness detection research pipeline
           </p>
+          {demoMode && (
+            <div className="mt-2">
+              <span className="px-2 py-0.5 bg-warning/20 text-warning rounded-full text-xs font-medium">
+                🎯 Demo Mode - Using demo_cows.csv data
+              </span>
+            </div>
+          )}
         </div>
-        <Link
-          to="/upload"
-          className="btn-premium inline-flex items-center gap-2 animate-slide-in-up"
-          style={{ animationDelay: '0.1s' }}
-        >
-          <Upload className="h-4 w-4" />
-          Upload Videos
-        </Link>
+        <div className="flex gap-2">
+          {!demoMode && (
+            <button
+              onClick={() => setDemoMode(true)}
+              className="px-4 py-2 border border-primary text-primary rounded-lg hover:bg-primary/10 animate-slide-in-up"
+              style={{ animationDelay: '0.1s' }}
+            >
+              Load Demo Data
+            </button>
+          )}
+          <Link
+            to="/upload"
+            className="btn-premium inline-flex items-center gap-2 animate-slide-in-up"
+            style={{ animationDelay: '0.1s' }}
+          >
+            <Upload className="h-4 w-4" />
+            Upload Videos
+          </Link>
+        </div>
       </div>
 
       {/* Metrics Grid */}

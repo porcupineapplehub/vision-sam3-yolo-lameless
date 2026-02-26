@@ -7,6 +7,7 @@ import {
   CowVideo 
 } from '@/api/client'
 import LLMExplanation from '@/components/LLMExplanation'
+import { getDemoCows } from '@/utils/demoData'
 
 interface CowDetails {
   id: string
@@ -33,7 +34,7 @@ export default function CowDetail() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'timeline' | 'videos' | 'details'>('timeline')
-  const [daysRange, setDaysRange] = useState(30)
+  const [weeksRange, setWeeksRange] = useState(4) // Changed to weeks
   
   // Edit mode
   const [isEditing, setIsEditing] = useState(false)
@@ -44,7 +45,7 @@ export default function CowDetail() {
     if (cowId) {
       loadCowData()
     }
-  }, [cowId, daysRange])
+  }, [cowId, weeksRange])
 
   const loadCowData = async () => {
     if (!cowId) return
@@ -52,9 +53,101 @@ export default function CowDetail() {
     try {
       setLoading(true)
       
+      // Check if this is a demo cow
+      const demoCows = getDemoCows()
+      const demoCow = demoCows.find(c => c.id === cowId)
+      
+      if (demoCow) {
+        // Load demo data
+        const tags = ['#A101', '#B205', '#C330', '#D412', '#E508']
+        const now = Date.now()
+        const oneDay = 24 * 60 * 60 * 1000
+        const daysAgo = Math.floor(Math.random() * 30)
+        
+        // Calculate score based on severity
+        let score = 0
+        if (demoCow.severity === 'healthy') score = 0.15
+        else if (demoCow.severity === 'mild') score = 0.4
+        else if (demoCow.severity === 'moderate') score = 0.65
+        else if (demoCow.severity === 'severe') score = 0.85
+        
+        setCow({
+          id: demoCow.id,
+          cow_id: demoCow.id,
+          tag_number: tags[Math.floor(Math.random() * tags.length)],
+          total_sightings: 15,
+          first_seen: new Date(now - 60 * oneDay).toISOString(),
+          last_seen: new Date(now - daysAgo * oneDay).toISOString(),
+          is_active: true,
+          notes: 'Demo cow from demo_cows.csv',
+          embedding_version: 'dinov3-base',
+          video_count: 3,
+          lameness_record_count: 3,
+          current_prediction: {
+            fusion_score: score,
+            aggregated_score: score, // Add for display in Lameness Score card
+            tleap_score: score + (Math.random() - 0.5) * 0.1,
+            tcn_score: score + (Math.random() - 0.5) * 0.1,
+            transformer_score: score + (Math.random() - 0.5) * 0.1,
+            is_lame: demoCow.severity === 'severe' || demoCow.severity === 'moderate',
+            confidence: 0.85,
+            severity_level: demoCow.severity,
+            observation_date: new Date(now - daysAgo * oneDay).toISOString()
+          },
+          last_prediction_update: new Date(now - daysAgo * oneDay).toISOString()
+        })
+        
+        // Generate timeline (data points in weekly intervals)
+        const numDataPoints = Math.min(weeksRange, 10) // Up to 10 data points
+        const timelineEntries: LamenessTimelineEntry[] = Array.from({ length: numDataPoints }, (_, i) => {
+          // Generate realistic score progression
+          let weekScore = score
+          if (demoCow.severity === 'severe' || demoCow.severity === 'moderate') {
+            // Gradual worsening for lame cows
+            weekScore = score - (i * 0.03) + (Math.random() - 0.5) * 0.1
+          } else {
+            // Stable/slight improvement for healthy cows
+            weekScore = score + (Math.random() - 0.5) * 0.12
+          }
+          weekScore = Math.max(0, Math.min(1, weekScore)) // Clamp 0-1
+          
+          return {
+            id: `timeline-${i}`,
+            video_id: demoCow.id,
+            date: new Date(now - (i * 7 * oneDay)).toISOString(), // Weekly intervals
+            fusion_score: parseFloat(weekScore.toFixed(3)),
+            tleap_score: weekScore + (Math.random() - 0.5) * 0.08,
+            tcn_score: weekScore + (Math.random() - 0.5) * 0.08,
+            transformer_score: weekScore + (Math.random() - 0.5) * 0.08,
+            is_lame: weekScore > 0.5,
+            severity_level: weekScore > 0.75 ? 'severe' : weekScore > 0.5 ? 'moderate' : weekScore > 0.3 ? 'mild' : 'healthy',
+            human_validated: i === 0 || i === 3, // Mark some as validated
+            confidence: 0.75 + Math.random() * 0.2
+          }
+        }).reverse() // Oldest to newest for chart
+        setTimeline(timelineEntries)
+        setTrend(Math.random() > 0.5 ? 'stable' : 'improving')
+        
+        // Generate demo videos
+        setVideos([{
+          video_id: demoCow.id,
+          filename: `cow_${demoCow.id}_demo.mp4`,
+          s3_url: demoCow.videoUrl,
+          recorded_date: new Date(now - daysAgo * oneDay).toISOString(),
+          lameness_score: score,
+          created_at: new Date(now - daysAgo * oneDay).toISOString()
+        }])
+        
+        setEditTag(tags[Math.floor(Math.random() * tags.length)])
+        setEditNotes('Demo cow from demo_cows.csv')
+        setError(null)
+        setLoading(false)
+        return
+      }
+      
       const [cowData, lamenessData, videosData] = await Promise.all([
         cowsApi.get(cowId),
-        cowsApi.getLameness(cowId, daysRange),
+        cowsApi.getLameness(cowId, weeksRange * 7), // Convert weeks to days for API
         cowsApi.getVideos(cowId, { limit: 50 })
       ])
       
@@ -291,7 +384,7 @@ export default function CowDetail() {
 
         {/* Trend */}
         <div className="border border-border rounded-lg p-6 bg-card">
-          <p className="text-sm text-muted-foreground mb-2">Trend ({daysRange}d)</p>
+          <p className="text-sm text-muted-foreground mb-2">Trend ({weeksRange} weeks)</p>
           <div className={`flex items-center gap-2 text-xl font-medium ${trendInfo.color}`}>
             <span className="text-2xl">{trendInfo.icon}</span>
             <span>{trendInfo.text}</span>
@@ -371,14 +464,14 @@ export default function CowDetail() {
           <div className="flex justify-between items-center">
             <h3 className="text-lg font-semibold">Lameness Timeline</h3>
             <select
-              value={daysRange}
-              onChange={(e) => setDaysRange(Number(e.target.value))}
+              value={weeksRange}
+              onChange={(e) => setWeeksRange(Number(e.target.value))}
               className="px-3 py-1.5 border border-border rounded-lg text-sm bg-card text-foreground"
             >
-              <option value={7}>Last 7 days</option>
-              <option value={30}>Last 30 days</option>
-              <option value={90}>Last 90 days</option>
-              <option value={365}>Last year</option>
+              <option value={4}>Last 4 weeks</option>
+              <option value={10}>Last 10 weeks</option>
+              <option value={26}>Last 6 months</option>
+              <option value={52}>Last year</option>
             </select>
           </div>
 
@@ -386,7 +479,7 @@ export default function CowDetail() {
           {timeline.length > 0 && (
             <div className="border border-border rounded-lg p-6 bg-card">
               <div className="flex items-end gap-1 h-32 mb-4">
-                {timeline.slice(0, 30).reverse().map((entry, idx) => {
+                {timeline.slice(0, 30).map((entry, idx) => {
                   const score = entry.fusion_score ?? 0.5
                   return (
                     <div
