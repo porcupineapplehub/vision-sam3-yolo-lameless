@@ -3,6 +3,12 @@ import { useNavigate } from 'react-router-dom'
 import { videosApi, eloRankingApi, tutorialApi, TutorialExample } from '@/api/client'
 import { useLanguage } from '@/contexts/LanguageContext'
 import { getRandomDemoPair, parseDemoCSV, resetDemoCache, type DemoPair } from '@/utils/demoData'
+import {
+  getValidDemoPairs,
+  computeFeedback,
+  type DemoConsensusPair,
+  type FeedbackResult,
+} from '@/utils/pairwiseConsensus'
 
 interface VideoPair {
   video_id_1: string
@@ -53,10 +59,14 @@ export default function PairwiseReview() {
   
   // Demo mode
   const [demoMode, setDemoMode] = useState(false)
-  const [demoPair, setDemoPair] = useState<DemoPair | null>(null)
+  const [demoPair, setDemoPair] = useState<DemoConsensusPair | null>(null)
   const [demoIndex, setDemoIndex] = useState(0)
-  const [demoPairs, setDemoPairs] = useState<DemoPair[]>([])
+  const [demoPairs, setDemoPairs] = useState<DemoConsensusPair[]>([])
   const [showDemoComplete, setShowDemoComplete] = useState(false)
+
+  // Consensus feedback shown after each demo submission
+  const [feedbackResult, setFeedbackResult] = useState<FeedbackResult | null>(null)
+  const [showFeedback, setShowFeedback] = useState(false)
 
   useEffect(() => {
     // Check if user has completed tutorial
@@ -126,25 +136,35 @@ export default function PairwiseReview() {
     setInTutorial(false)
     setTutorialLoading(false)
     localStorage.setItem('pairwise_tutorial_complete', 'true')
-    
-    // Clear cache and get fresh demo pairs (first 3)
-    resetDemoCache()
-    const allPairs = parseDemoCSV()
-    
-    // Verify the pairs
-    console.log('=== DEMO PAIRS ORDER ===')
-    allPairs.slice(0, 5).forEach((p, i) => {
-      console.log(`Pair ${i + 1}: ${p.cow_L} vs ${p.cow_R}`)
-    })
-    
-    const firstThree = allPairs.slice(0, 3)
-    console.log('Setting demo pairs:', firstThree.map(p => `${p.cow_L} vs ${p.cow_R}`))
-    
-    setDemoPairs(firstThree)
-    setDemoPair(firstThree[0])
+
+    // Use local video pairs + CSV consensus data
+    const allPairs = getValidDemoPairs()
+
+    // Shuffle for variety; fall back to legacy S3 pairs if no local videos found
+    if (allPairs.length === 0) {
+      resetDemoCache()
+      const legacyAll = parseDemoCSV()
+      // Legacy pairs don't have consensusData; wrap them minimally
+      // (feedback won't fire for these but UI still works)
+      setDemoPairs([])
+      setDemoPair(null)
+      setDemoIndex(0)
+      setShowDemoComplete(false)
+      setShowFeedback(false)
+      setIsPlaying(true)
+      setLoading(false)
+      return
+    }
+
+    const shuffled = [...allPairs].sort(() => Math.random() - 0.5)
+
+    setDemoPairs(shuffled)
+    setDemoPair(shuffled[0])
     setDemoIndex(0)
     setShowDemoComplete(false)
-    setIsPlaying(true) // Auto-play in demo mode
+    setShowFeedback(false)
+    setFeedbackResult(null)
+    setIsPlaying(true)
     setLoading(false)
   }
 
@@ -194,19 +214,12 @@ export default function PairwiseReview() {
 
     setSubmitting(true)
     
-    if (demoMode) {
-      // Demo mode submission
-      const isLastPair = demoIndex === demoPairs.length - 1
-      
-      if (isLastPair) {
-        // Show success with confetti
-        setShowDemoComplete(true)
-        setSubmitting(false)
-      } else {
-        // Move to next pair
-        await loadNextPair()
-        setSubmitting(false)
-      }
+    if (demoMode && demoPair) {
+      // Compute instant consensus feedback
+      const feedback = computeFeedback(demoPair.cow_L, demoPair.cow_R, selectedValue)
+      setFeedbackResult(feedback)
+      setShowFeedback(true)
+      setSubmitting(false)
       return
     }
     
@@ -251,6 +264,22 @@ export default function PairwiseReview() {
     }
   }
 
+  const handleFeedbackNext = () => {
+    setShowFeedback(false)
+    setFeedbackResult(null)
+    setSelectedValue(null)
+
+    const isLastPair = demoIndex === demoPairs.length - 1
+    if (isLastPair) {
+      setShowDemoComplete(true)
+    } else {
+      const nextIndex = demoIndex + 1
+      setDemoPair(demoPairs[nextIndex])
+      setDemoIndex(nextIndex)
+      setIsPlaying(true)
+    }
+  }
+
   const togglePlayback = () => {
     if (video1Ref.current && video2Ref.current) {
       if (isPlaying) {
@@ -289,7 +318,7 @@ export default function PairwiseReview() {
 
     video1.addEventListener('timeupdate', syncPlayback)
     return () => video1.removeEventListener('timeupdate', syncPlayback)
-  }, [pair])
+  }, [pair, demoPair])
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -613,7 +642,7 @@ export default function PairwiseReview() {
           {demoMode && (
             <div className="mt-2">
               <span className="px-3 py-1 bg-warning/20 text-warning rounded-full text-xs font-medium">
-                🎯 Demo Mode - Using demo_cows.csv data
+                🎯 Demo Mode — Pair {demoIndex + 1} / {demoPairs.length}
               </span>
             </div>
           )}
@@ -782,65 +811,128 @@ export default function PairwiseReview() {
             </button>
           </div>
 
-          {/* 7-Point Comparison Scale - Circular Buttons */}
-          <div className="space-y-2">
-            <label className="block text-center font-medium text-foreground text-sm">
-              {t('pairwise.selectOption')}
-            </label>
-            <div className="flex items-center justify-center gap-10 py-3">
-              {COMPARISON_SCALE.map((option, idx) => {
-                // Smaller sizes with better spacing
-                const sizeClass = 
-                  idx === 0 || idx === 6 ? 'w-14 h-14' :  // Large outer
-                  idx === 1 || idx === 5 ? 'w-12 h-12' :  // Medium-large
-                  idx === 2 || idx === 4 ? 'w-10 h-10' :  // Medium
-                  'w-8 h-8';                               // Small (center)
-                
-                // Softer, less bright colors
-                const colorClass = 
-                  selectedValue === option.value
-                    ? option.value < 0 ? 'bg-blue-600 border-blue-700' :
-                      option.value > 0 ? 'bg-orange-600 border-orange-700' :
-                      'bg-gray-500 border-gray-600'
-                    : option.value < 0 ? 'bg-blue-500/50 hover:bg-blue-500/70 border-blue-500/60' :
-                      option.value > 0 ? 'bg-orange-500/50 hover:bg-orange-500/70 border-orange-500/60' :
-                      'bg-gray-400/40 hover:bg-gray-400/60 border-gray-400/50';
-
-                // Text label for outer buttons
-                const showText = idx === 0 || idx === 6;
-                const labelText = idx === 0 ? 'Left cow much more lame' : idx === 6 ? 'Right cow much more lame' : '';
-
-                return (
-                  <div key={option.value} className="flex flex-col items-center gap-1 flex-shrink-0">
-                    <span className={`text-xs mb-1 h-4 ${showText ? 'text-muted-foreground' : 'invisible'}`}>
-                      {showText ? labelText : 'placeholder'}
-                    </span>
-                    <button
-                      onClick={() => setSelectedValue(option.value)}
-                      className={`rounded-full ${sizeClass} ${colorClass} border-2 transition-all flex-shrink-0 ${
-                        selectedValue === option.value ? 'ring-3 ring-offset-2 ring-primary scale-110' : ''
-                      }`}
-                      title={option.label}
-                      style={{ aspectRatio: '1 / 1' }}
-                    >
-                      <span className="sr-only">{option.label}</span>
-                    </button>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-
-          {/* Submit Button */}
-          <div className="flex justify-center mt-3">
-            <button
-              onClick={handleSubmit}
-              disabled={selectedValue === null || submitting}
-              className="px-8 py-2 bg-success text-white rounded-lg font-medium hover:bg-success/90 disabled:opacity-50 disabled:cursor-not-allowed"
+          {/* ── Feedback overlay (shown after demo submission) ── */}
+          {showFeedback && feedbackResult ? (
+            <div
+              className={`rounded-2xl border-2 p-6 text-center space-y-3 transition-all ${
+                feedbackResult.type === 'great'
+                  ? 'bg-emerald-500/10 border-emerald-500/40'
+                  : feedbackResult.type === 'good'
+                  ? 'bg-blue-500/10 border-blue-500/40'
+                  : feedbackResult.type === 'interesting'
+                  ? 'bg-amber-500/10 border-amber-500/40'
+                  : 'bg-red-500/10 border-red-500/40'
+              }`}
             >
-              {submitting ? 'Loading...' : demoMode && demoIndex < demoPairs.length - 1 ? 'Next' : demoMode ? 'Submit' : t('pairwise.submit')}
-            </button>
-          </div>
+              <div className="text-5xl animate-bounce">{feedbackResult.emoji}</div>
+              <div className="text-xl font-bold text-foreground">{feedbackResult.message}</div>
+              <div className="text-sm text-muted-foreground max-w-sm mx-auto">
+                {feedbackResult.details}
+              </div>
+
+              {/* Mini bar showing user vs consensus */}
+              <div className="flex items-center gap-3 max-w-xs mx-auto mt-2">
+                <span className="text-xs text-muted-foreground w-16 text-right">Left lamer</span>
+                <div className="relative flex-1 h-3 bg-muted rounded-full overflow-visible">
+                  {/* Consensus tick */}
+                  <div
+                    className="absolute top-1/2 -translate-y-1/2 w-1 h-5 bg-primary rounded-full"
+                    style={{ left: `${((feedbackResult.consensusMean + 3) / 6) * 100}%` }}
+                    title={`Consensus: ${feedbackResult.consensusMean.toFixed(1)}`}
+                  />
+                  {/* User tick */}
+                  <div
+                    className="absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full border-2 border-foreground bg-background"
+                    style={{ left: `calc(${((feedbackResult.userCanonical + 3) / 6) * 100}% - 6px)` }}
+                    title={`Your answer: ${feedbackResult.userCanonical}`}
+                  />
+                </div>
+                <span className="text-xs text-muted-foreground w-16">Right lamer</span>
+              </div>
+              <div className="flex gap-2 justify-center text-xs text-muted-foreground">
+                <span className="flex items-center gap-1">
+                  <span className="inline-block w-3 h-0.5 bg-primary rounded" /> Consensus
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="inline-block w-3 h-3 rounded-full border-2 border-foreground bg-background" /> You
+                </span>
+              </div>
+
+              <button
+                onClick={handleFeedbackNext}
+                className={`mt-2 px-8 py-2 rounded-lg font-medium text-white transition-colors ${
+                  feedbackResult.type === 'great'
+                    ? 'bg-emerald-600 hover:bg-emerald-700'
+                    : feedbackResult.type === 'good'
+                    ? 'bg-blue-600 hover:bg-blue-700'
+                    : feedbackResult.type === 'interesting'
+                    ? 'bg-amber-600 hover:bg-amber-700'
+                    : 'bg-red-600 hover:bg-red-700'
+                }`}
+              >
+                {demoIndex === demoPairs.length - 1 ? '🏁 Finish' : 'Next Pair →'}
+              </button>
+            </div>
+          ) : (
+            <>
+              {/* 7-Point Comparison Scale - Circular Buttons */}
+              <div className="space-y-2">
+                <label className="block text-center font-medium text-foreground text-sm">
+                  {t('pairwise.selectOption')}
+                </label>
+                <div className="flex items-center justify-center gap-10 py-3">
+                  {COMPARISON_SCALE.map((option, idx) => {
+                    const sizeClass =
+                      idx === 0 || idx === 6 ? 'w-14 h-14' :
+                      idx === 1 || idx === 5 ? 'w-12 h-12' :
+                      idx === 2 || idx === 4 ? 'w-10 h-10' :
+                      'w-8 h-8'
+
+                    const colorClass =
+                      selectedValue === option.value
+                        ? option.value < 0 ? 'bg-blue-600 border-blue-700' :
+                          option.value > 0 ? 'bg-orange-600 border-orange-700' :
+                          'bg-gray-500 border-gray-600'
+                        : option.value < 0 ? 'bg-blue-500/50 hover:bg-blue-500/70 border-blue-500/60' :
+                          option.value > 0 ? 'bg-orange-500/50 hover:bg-orange-500/70 border-orange-500/60' :
+                          'bg-gray-400/40 hover:bg-gray-400/60 border-gray-400/50'
+
+                    const showText = idx === 0 || idx === 6
+                    const labelText = idx === 0 ? 'Left cow much more lame' : idx === 6 ? 'Right cow much more lame' : ''
+
+                    return (
+                      <div key={option.value} className="flex flex-col items-center gap-1 flex-shrink-0">
+                        <span className={`text-xs mb-1 h-4 ${showText ? 'text-muted-foreground' : 'invisible'}`}>
+                          {showText ? labelText : 'placeholder'}
+                        </span>
+                        <button
+                          onClick={() => setSelectedValue(option.value)}
+                          className={`rounded-full ${sizeClass} ${colorClass} border-2 transition-all flex-shrink-0 ${
+                            selectedValue === option.value ? 'ring-3 ring-offset-2 ring-primary scale-110' : ''
+                          }`}
+                          title={option.label}
+                          style={{ aspectRatio: '1 / 1' }}
+                        >
+                          <span className="sr-only">{option.label}</span>
+                        </button>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* Submit Button */}
+              <div className="flex justify-center mt-3">
+                <button
+                  onClick={handleSubmit}
+                  disabled={selectedValue === null || submitting}
+                  className="px-8 py-2 bg-success text-white rounded-lg font-medium hover:bg-success/90 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {submitting ? 'Loading...' : t('pairwise.submit')}
+                </button>
+              </div>
+            </>
+          )}
 
           {/* Lameness Indicators Guide */}
           <div className="bg-muted/50 rounded-lg p-4 text-sm">

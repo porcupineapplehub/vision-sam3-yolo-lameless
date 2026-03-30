@@ -14,6 +14,7 @@ import HierarchyVisualization from './pages/HierarchyVisualization'
 import SimilarityMap from './pages/SimilarityMap'
 import TrainingModule from './pages/TrainingModule'
 import Performance from './pages/Performance'
+import PairwiseResults from './pages/PairwiseResults'
 import Login from './pages/Login'
 import PipelineMonitor from './pages/PipelineMonitor'
 import SystemHealth from './pages/SystemHealth'
@@ -75,6 +76,7 @@ function App() {
                     <Route path="/hierarchy" element={<HierarchyVisualization />} />
                     <Route path="/similarity" element={<SimilarityMap />} />
                     <Route path="/performance" element={<Performance />} />
+                    <Route path="/pair-results" element={<PairwiseResults />} />
                     <Route path="/learn" element={<TrainingModule />} />
 
                     {/* Cow Registry - all authenticated users */}

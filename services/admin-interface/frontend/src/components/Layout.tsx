@@ -41,7 +41,8 @@ import {
   Palette,
   Bell,
   Search,
-  Command
+  Command,
+  BarChart2,
 } from 'lucide-react'
 
 interface LayoutProps {
@@ -98,11 +99,12 @@ export default function Layout({ children }: LayoutProps) {
     { path: '/upload', label: 'Upload', icon: Upload, roles: ['admin', 'researcher'] },
     { path: '/cows', label: t('nav.cowRegistry'), icon: Beef, roles: ['admin', 'researcher', 'rater'] },
     { path: '/pairwise', label: t('nav.pairwise'), icon: GitCompare, roles: ['admin', 'researcher', 'rater'] },
-    { path: '/triplet', label: t('nav.triplet'), icon: Triangle, roles: ['admin', 'researcher', 'rater'] },
+    // { path: '/triplet', label: t('nav.triplet'), icon: Triangle, roles: ['admin', 'researcher', 'rater'] },
     { path: '/performance', label: 'Performance', icon: Activity, roles: ['rater'] },
+    { path: '/pair-results', label: 'Pair Results', icon: BarChart2, roles: ['admin', 'researcher', 'rater'] },
     { path: '/hierarchy', label: t('nav.hierarchy'), icon: Network, roles: ['admin', 'researcher'] },
     { path: '/similarity', label: t('nav.similarity'), icon: Map, roles: ['admin', 'researcher'] },
-    { path: '/learn', label: t('nav.learn'), icon: GraduationCap, roles: ['admin', 'researcher', 'rater'] },
+    // { path: '/learn', label: t('nav.learn'), icon: GraduationCap, roles: ['admin', 'researcher', 'rater'] },
     { path: '/pipelines', label: 'Pipelines', icon: Activity, roles: ['admin', 'researcher'] },
     { path: '/health', label: 'Health', icon: Heart, roles: ['admin', 'researcher'] },
     { path: '/training', label: 'Queue', icon: ListTodo, roles: ['admin', 'researcher'] },
