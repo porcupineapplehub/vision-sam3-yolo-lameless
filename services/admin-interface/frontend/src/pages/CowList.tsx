@@ -2,8 +2,16 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { cowsApi, CowIdentity } from '@/api/client'
 import { cn } from '@/lib/utils'
-import { Beef, Search, RefreshCw, Loader2, ChevronLeft, ChevronRight, Activity } from 'lucide-react'
-import { getDemoCows } from '@/utils/demoData'
+import { Beef, Search, Loader2, ChevronLeft, ChevronRight, Activity, Trophy } from 'lucide-react'
+import { useAuth } from '@/contexts/AuthContext'
+import { getCowRankings } from '@/utils/pairwiseConsensus'
+
+interface RankedCow extends CowIdentity {
+  rank?: number
+  wins?: number
+  losses?: number
+  comparisons?: number
+}
 
 interface SeverityStats {
   healthy: number
@@ -22,16 +30,23 @@ interface CowStats {
 }
 
 export default function CowList() {
-  const [cows, setCows] = useState<CowIdentity[]>([])
+  const { user } = useAuth()
+  const isGuest = user?.id === 'guest'
+  const useDemo = isGuest || user?.role === 'rater'
+
+  const [cows, setCows] = useState<RankedCow[]>([])
   const [stats, setStats] = useState<CowStats | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [demoMode, setDemoMode] = useState(false)
   
   // Filters
   const [severityFilter, setSeverityFilter] = useState<string>('')
   const [activeFilter, setActiveFilter] = useState<boolean | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
+  
+  // Sorting
+  const [sortBy, setSortBy] = useState<'severity' | 'score' | 'videos' | 'lastSeen' | null>(null)
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc')
   
   // Pagination
   const [skip, setSkip] = useState(0)
@@ -39,72 +54,58 @@ export default function CowList() {
   const limit = 20
 
   useEffect(() => {
-    loadData()
-  }, [severityFilter, activeFilter, skip])
+    if (useDemo) {
+      loadDemoData()
+    } else {
+      loadData()
+    }
+  }, [severityFilter, activeFilter, skip, useDemo])
 
   const loadDemoData = () => {
-    setDemoMode(true)
-    const demoCows = getDemoCows()
-    
-    // Generate random data for demo cows
-    const tags = ['#A101', '#B205', '#C330', '#D412', '#E508', '#F621', '#G734', '#H845']
-    const now = Date.now()
-    const oneDay = 24 * 60 * 60 * 1000
-    
-    const mockCows: CowIdentity[] = demoCows.map((dc, idx) => {
-      const daysAgo = Math.floor(Math.random() * 30) // Random days ago (0-30)
-      const lastSeen = new Date(now - (daysAgo * oneDay)).toISOString()
-      const firstSeen = new Date(now - ((daysAgo + 60) * oneDay)).toISOString()
-      const numVideos = Math.floor(Math.random() * 50) + 1 // Random 1-50
-      
-      // Generate severity score based on severity level (0-1 scale)
-      let score = 0
-      if (dc.severity === 'healthy') score = Math.random() * 0.3  // 0-30%
-      else if (dc.severity === 'mild') score = 0.3 + Math.random() * 0.2  // 30-50%
-      else if (dc.severity === 'moderate') score = 0.5 + Math.random() * 0.25  // 50-75%
-      else if (dc.severity === 'severe') score = 0.75 + Math.random() * 0.25  // 75-100%
-      
-      return {
-        id: dc.id,
-        cow_id: dc.id,
-        tag_number: tags[Math.floor(Math.random() * tags.length)],
-        total_sightings: numVideos,
-        first_seen: firstSeen,
-        last_seen: lastSeen,
-        is_active: Math.random() > 0.1, // 90% active
-        notes: 'Demo cow from demo_cows.csv',
-        current_score: parseFloat(score.toFixed(2)),
-        severity_level: dc.severity,
-        num_videos: numVideos
-      }
-    })
-    
-    // Calculate severity distribution
+    setError(null)
+
+    // Use real lameness rankings derived from pairwise comparison CSV
+    const rankings = getCowRankings()
+
+    const rankedCows: RankedCow[] = rankings.map((r) => ({
+      id: r.cowId,
+      cow_id: r.cowId,
+      tag_number: `#${r.cowId}`,
+      total_sightings: r.comparisons,
+      first_seen: null,
+      last_seen: null,
+      is_active: true,
+      notes: `Rank #${r.rank} — ${r.wins}W / ${r.losses}L / ${r.ties}T from ${r.comparisons} judgments`,
+      current_score: parseFloat(r.normalizedScore.toFixed(3)),
+      severity_level: r.severity,
+      num_videos: r.comparisons,
+      rank: r.rank,
+      wins: r.wins,
+      losses: r.losses,
+      comparisons: r.comparisons,
+    }))
+
     const distribution = {
-      healthy: mockCows.filter(c => c.severity_level === 'healthy').length,
-      mild: mockCows.filter(c => c.severity_level === 'mild').length,
-      moderate: mockCows.filter(c => c.severity_level === 'moderate').length,
-      severe: mockCows.filter(c => c.severity_level === 'severe').length,
-      unknown: mockCows.filter(c => !c.severity_level || c.severity_level === 'unknown').length
+      healthy:  rankedCows.filter(c => c.severity_level === 'healthy').length,
+      mild:     rankedCows.filter(c => c.severity_level === 'mild').length,
+      moderate: rankedCows.filter(c => c.severity_level === 'moderate').length,
+      severe:   rankedCows.filter(c => c.severity_level === 'severe').length,
+      unknown:  0,
     }
-    
-    setCows(mockCows)
-    setTotal(mockCows.length)
+
+    setCows(rankedCows)
+    setTotal(rankedCows.length)
     setStats({
-      total_cows: mockCows.length,
-      active_cows: mockCows.filter(c => c.is_active).length,
-      total_videos_tracked: mockCows.reduce((sum, c) => sum + c.num_videos!, 0),
-      total_lameness_records: mockCows.length,
-      severity_distribution: distribution
+      total_cows: rankedCows.length,
+      active_cows: rankedCows.length,
+      total_videos_tracked: rankedCows.reduce((s, c) => s + (c.num_videos ?? 0), 0),
+      total_lameness_records: rankedCows.length,
+      severity_distribution: distribution,
     })
     setLoading(false)
   }
   
   const loadData = async () => {
-    if (demoMode) {
-      loadDemoData()
-      return
-    }
     
     try {
       setLoading(true)
@@ -160,11 +161,42 @@ export default function CowList() {
     })
   }
 
+  const handleSort = (column: 'severity' | 'score' | 'videos' | 'lastSeen') => {
+    if (sortBy === column) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortBy(column)
+      setSortDirection('desc')
+    }
+  }
+
   const filteredCows = cows.filter(cow => {
     if (!searchQuery) return true
     const query = searchQuery.toLowerCase()
-    return cow.cow_id.toLowerCase().includes(query) ||
-           (cow.tag_number?.toLowerCase().includes(query) ?? false)
+    return cow.cow_id.toLowerCase().includes(query)
+  })
+
+  const sortedCows = [...filteredCows].sort((a, b) => {
+    if (!sortBy) return 0
+    
+    let compareResult = 0
+    
+    if (sortBy === 'severity') {
+      const severityOrder = { 'severe': 4, 'moderate': 3, 'mild': 2, 'healthy': 1, 'unknown': 0 }
+      const aValue = severityOrder[a.severity_level as keyof typeof severityOrder] || 0
+      const bValue = severityOrder[b.severity_level as keyof typeof severityOrder] || 0
+      compareResult = aValue - bValue
+    } else if (sortBy === 'score') {
+      compareResult = (a.current_score || 0) - (b.current_score || 0)
+    } else if (sortBy === 'videos') {
+      compareResult = (a.num_videos || a.total_sightings || 0) - (b.num_videos || b.total_sightings || 0)
+    } else if (sortBy === 'lastSeen') {
+      const aDate = a.last_seen ? new Date(a.last_seen).getTime() : 0
+      const bDate = b.last_seen ? new Date(b.last_seen).getTime() : 0
+      compareResult = aDate - bDate
+    }
+    
+    return sortDirection === 'asc' ? compareResult : -compareResult
   })
 
   if (loading && cows.length === 0) {
@@ -194,23 +226,15 @@ export default function CowList() {
           <div>
             <h1 className="text-2xl font-bold">Cow Registry</h1>
             <p className="text-muted-foreground">Track and monitor individual cows across video analyses</p>
-            {demoMode && (
+            {useDemo && (
               <div className="mt-1">
                 <span className="px-2 py-0.5 bg-warning/20 text-warning rounded-full text-xs font-medium">
-                  🎯 Demo Mode - Using demo_cows.csv data
+                  🎯 Demo Mode — Rankings derived from pairwise comparison CSV
                 </span>
               </div>
             )}
           </div>
         </div>
-        {!demoMode && (
-          <button
-            onClick={loadDemoData}
-            className="px-4 py-2 border border-primary text-primary rounded-lg hover:bg-primary/10"
-          >
-            Load Demo Data
-          </button>
-        )}
       </div>
 
       {/* Stats Cards */}
@@ -288,7 +312,7 @@ export default function CowList() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <input
               type="text"
-              placeholder="Search by cow ID or tag..."
+              placeholder="Search by cow ID..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="input-premium pl-10 w-full"
@@ -319,13 +343,6 @@ export default function CowList() {
             <option value="active">Active Only</option>
             <option value="inactive">Inactive Only</option>
           </select>
-          
-          <button
-            onClick={loadData}
-            className="p-2.5 rounded-xl hover:bg-accent/50 text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <RefreshCw className={cn("h-5 w-5", loading && 'animate-spin')} />
-          </button>
         </div>
       </div>
 
@@ -337,7 +354,7 @@ export default function CowList() {
       )}
 
       {/* Cow Table */}
-      {filteredCows.length === 0 ? (
+      {sortedCows.length === 0 ? (
         <div className="premium-card text-center py-16 animate-fade-in">
           <div className="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center mx-auto mb-4">
             <Beef className="h-8 w-8 text-muted-foreground" />
@@ -352,42 +369,93 @@ export default function CowList() {
       ) : (
         <div className="premium-card p-0 overflow-hidden animate-slide-in-up" style={{ animationDelay: '0.5s', animationFillMode: 'backwards' }}>
           <div className="overflow-x-auto">
-            <table className="premium-table">
+              <table className="premium-table">
               <thead>
                 <tr>
+                  {useDemo && <th className="w-12 text-center">Rank</th>}
                   <th>Cow ID</th>
-                  <th>Tag</th>
-                  <th>Severity</th>
-                  <th>Score</th>
-                  <th>Videos</th>
-                  <th>Last Seen</th>
+                  <th 
+                    className="cursor-pointer hover:bg-accent/50 transition-colors"
+                    onClick={() => handleSort('severity')}
+                  >
+                    <div className="flex items-center gap-1">
+                      Severity
+                      {sortBy === 'severity' && (
+                        <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                      )}
+                    </div>
+                  </th>
+                  <th 
+                    className="cursor-pointer hover:bg-accent/50 transition-colors"
+                    onClick={() => handleSort('score')}
+                  >
+                    <div className="flex items-center gap-1">
+                      Score
+                      {sortBy === 'score' && (
+                        <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                      )}
+                    </div>
+                  </th>
+                  {!useDemo && (
+                    <>
+                      <th 
+                        className="cursor-pointer hover:bg-accent/50 transition-colors"
+                        onClick={() => handleSort('videos')}
+                      >
+                        <div className="flex items-center gap-1">
+                          Videos
+                          {sortBy === 'videos' && (
+                            <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                          )}
+                        </div>
+                      </th>
+                      <th 
+                        className="cursor-pointer hover:bg-accent/50 transition-colors"
+                        onClick={() => handleSort('lastSeen')}
+                      >
+                        <div className="flex items-center gap-1">
+                          Last Seen
+                          {sortBy === 'lastSeen' && (
+                            <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                          )}
+                        </div>
+                      </th>
+                    </>
+                  )}
                   <th>Status</th>
                   <th className="text-right">Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredCows.map((cow, i) => (
+                {sortedCows.map((cow, i) => (
                   <tr
                     key={cow.id}
                     className="animate-fade-in"
                     style={{ animationDelay: `${i * 0.03}s`, animationFillMode: 'backwards' }}
                   >
+                    {useDemo && (
+                      <td className="text-center">
+                        <span className={cn(
+                          'inline-flex items-center justify-center w-8 h-8 rounded-full text-xs font-bold',
+                          (cow as RankedCow).rank === 1 ? 'bg-yellow-500/20 text-yellow-500' :
+                          (cow as RankedCow).rank === 2 ? 'bg-gray-400/20 text-gray-400' :
+                          (cow as RankedCow).rank === 3 ? 'bg-orange-500/20 text-orange-500' :
+                          'bg-muted text-muted-foreground'
+                        )}>
+                          {(cow as RankedCow).rank === 1 ? '🥇' :
+                           (cow as RankedCow).rank === 2 ? '🥈' :
+                           (cow as RankedCow).rank === 3 ? '🥉' :
+                           `#${(cow as RankedCow).rank}`}
+                        </span>
+                      </td>
+                    )}
                     <td>
                       <Link 
                         to={`/cows/${cow.cow_id}`}
-                        className="font-medium text-primary hover:underline"
+                        className="font-medium text-primary hover:underline font-mono"
                       >
-                        {cow.cow_id.slice(0, 8)}...
+                        {cow.cow_id}
                       </Link>
-                    </td>
-                    <td>
-                      {cow.tag_number ? (
-                        <span className="px-2 py-1 bg-muted rounded-lg text-sm font-mono">
-                          {cow.tag_number}
-                        </span>
-                      ) : (
-                        <span className="text-muted-foreground text-sm">—</span>
-                      )}
                     </td>
                     <td>
                       <span className={cn(
@@ -420,14 +488,16 @@ export default function CowList() {
                         <span className="text-muted-foreground text-sm">—</span>
                       )}
                     </td>
-                    <td>
-                      <span className="text-sm">
-                        {cow.num_videos ?? cow.total_sightings ?? 0}
-                      </span>
-                    </td>
-                    <td className="text-muted-foreground">
-                      {formatDate(cow.last_seen)}
-                    </td>
+                    {!useDemo && (
+                      <>
+                        <td>
+                          <span className="text-sm">{cow.num_videos ?? cow.total_sightings ?? 0}</span>
+                        </td>
+                        <td className="text-muted-foreground">
+                          {formatDate(cow.last_seen)}
+                        </td>
+                      </>
+                    )}
                     <td>
                       {cow.is_active ? (
                         <span className="badge badge-success">Active</span>

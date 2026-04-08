@@ -110,12 +110,6 @@ function parseConsensus(): Map<string, ConsensusData> {
   const consensus = new Map<string, ConsensusData>()
 
   for (const [key, scores] of pairScores.entries()) {
-    // Only treat a pair as "real human data" if at least one judgment has degree > 0.
-    // The CSV contains a trailing block of all-degree-0 implied/transitive pairs
-    // that were never directly compared – we exclude those from consensus.
-    const hasRealData = scores.some(s => s !== 0)
-    if (!hasRealData) continue
-
     const [minCow, maxCow] = key.split('_')
     const n = scores.length
     const mean = scores.reduce((a, b) => a + b, 0) / n
@@ -153,6 +147,107 @@ function parseConsensus(): Map<string, ConsensusData> {
   }
 
   return consensus
+}
+
+// ---------------------------------------------------------------------------
+// Cow ranking
+// ---------------------------------------------------------------------------
+
+export interface CowRanking {
+  cowId: string
+  /** 1 = most lame */
+  rank: number
+  /** Average lameness signal: positive = more lame, range roughly -3…+3 */
+  rawScore: number
+  /** 0–1 normalized across all cows; 1 = most lame */
+  normalizedScore: number
+  severity: 'healthy' | 'mild' | 'moderate' | 'severe'
+  /** Total individual judgments this cow participated in */
+  comparisons: number
+  /** Times judged as the less-lame / healthier cow */
+  wins: number
+  /** Times judged as the more-lame cow */
+  losses: number
+  /** Times judged equal (degree 0) */
+  ties: number
+  videoUrl?: string
+}
+
+/**
+ * Derive a global lameness ranking for every cow that has real comparison data.
+ *
+ * For each comparison in the CSV, the loser (more lame) receives a positive
+ * lameness signal equal to the degree (1–3), and the winner (less lame)
+ * receives a negative signal.  The average signal per cow is then
+ * min-max normalised to 0–1 and bucketed into severity tiers.
+ */
+export function getCowRankings(): CowRanking[] {
+  const consensus = getConsensusData()
+  const videoMap = getCowVideoMap()
+
+  // Accumulate signed lameness signals per cow
+  // canonical score for pair (minCow, maxCow):
+  //   positive → maxCow is more lame
+  //   negative → minCow is more lame
+  const signals = new Map<string, number[]>()
+
+  for (const pair of consensus.values()) {
+    const { minCow, maxCow, scores } = pair
+    for (const c of scores) {
+      if (!signals.has(maxCow)) signals.set(maxCow, [])
+      if (!signals.has(minCow)) signals.set(minCow, [])
+      signals.get(maxCow)!.push(c)   // positive → maxCow more lame
+      signals.get(minCow)!.push(-c)  // flipped  → minCow more lame when negative
+    }
+  }
+
+  // Compute per-cow raw scores
+  const rows: {
+    cowId: string; raw: number; comparisons: number
+    wins: number; losses: number; ties: number
+  }[] = []
+
+  for (const [cowId, sigs] of signals.entries()) {
+    const raw = sigs.reduce((a, b) => a + b, 0) / sigs.length
+    rows.push({
+      cowId,
+      raw,
+      comparisons: sigs.length,
+      wins:   sigs.filter(s => s < 0).length,   // less lame = win
+      losses: sigs.filter(s => s > 0).length,   // more lame = loss
+      ties:   sigs.filter(s => s === 0).length,
+    })
+  }
+
+  // Sort descending by raw score (most lame first)
+  rows.sort((a, b) => b.raw - a.raw)
+
+  const minRaw = rows[rows.length - 1]?.raw ?? 0
+  const maxRaw = rows[0]?.raw ?? 1
+  const range = maxRaw - minRaw || 1
+
+  return rows.map((item, idx) => {
+    const n = (item.raw - minRaw) / range  // 0–1, 1 = most lame
+
+    let severity: CowRanking['severity']
+    if (n >= 0.75) severity = 'severe'
+    else if (n >= 0.50) severity = 'moderate'
+    else if (n >= 0.25) severity = 'mild'
+    else severity = 'healthy'
+
+    return {
+      cowId: item.cowId,
+      rank: idx + 1,
+      rawScore: item.raw,
+      normalizedScore: n,
+      severity,
+      comparisons: item.comparisons,
+      wins: item.wins,
+      losses: item.losses,
+      ties: item.ties,
+      videoUrl: videoMap.get(item.cowId),
+    }
+  })
 }
 
 // ---------------------------------------------------------------------------

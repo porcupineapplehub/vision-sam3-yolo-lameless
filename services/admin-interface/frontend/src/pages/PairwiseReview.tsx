@@ -2,6 +2,8 @@ import { useEffect, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { videosApi, eloRankingApi, tutorialApi, TutorialExample } from '@/api/client'
 import { useLanguage } from '@/contexts/LanguageContext'
+import { useAuth } from '@/contexts/AuthContext'
+import { cn } from '@/lib/utils'
 import { getRandomDemoPair, parseDemoCSV, resetDemoCache, type DemoPair } from '@/utils/demoData'
 import {
   getValidDemoPairs,
@@ -9,6 +11,77 @@ import {
   type DemoConsensusPair,
   type FeedbackResult,
 } from '@/utils/pairwiseConsensus'
+
+// ── Task definitions ─────────────────────────────────────────────────────────
+interface PairwiseTask {
+  id: number
+  name: string
+  description: string
+  pairCount: number
+  completedPeople: number
+  requiredPeople: number
+  color: string
+  bgColor: string
+  textColor: string
+  borderColor: string
+}
+
+const PAIRWISE_TASKS: PairwiseTask[] = [
+  {
+    id: 1,
+    name: 'UBC Farm 1',
+    description: 'Morning session — Spring 2021',
+    pairCount: 10,
+    completedPeople: 13,
+    requiredPeople: 20,
+    color: 'from-blue-500 to-blue-600',
+    bgColor: 'bg-blue-500/10',
+    textColor: 'text-blue-500',
+    borderColor: 'border-blue-500/30',
+  },
+  {
+    id: 2,
+    name: 'UBC Farm 2',
+    description: 'Afternoon session — Spring 2021',
+    pairCount: 12,
+    completedPeople: 8,
+    requiredPeople: 20,
+    color: 'from-violet-500 to-violet-600',
+    bgColor: 'bg-violet-500/10',
+    textColor: 'text-violet-500',
+    borderColor: 'border-violet-500/30',
+  },
+  {
+    id: 3,
+    name: 'UBC Farm 3',
+    description: 'Evening rounds — Summer 2021',
+    pairCount: 10,
+    completedPeople: 5,
+    requiredPeople: 20,
+    color: 'from-amber-500 to-amber-600',
+    bgColor: 'bg-amber-500/10',
+    textColor: 'text-amber-500',
+    borderColor: 'border-amber-500/30',
+  },
+  {
+    id: 4,
+    name: 'UBC Farm 4',
+    description: 'Expert validation — Fall 2021',
+    pairCount: 8,
+    completedPeople: 2,
+    requiredPeople: 20,
+    color: 'from-rose-500 to-rose-600',
+    bgColor: 'bg-rose-500/10',
+    textColor: 'text-rose-500',
+    borderColor: 'border-rose-500/30',
+  },
+]
+
+// Pair offsets: task i starts at sum of pairCounts of tasks 0..i-1
+const TASK_OFFSETS = PAIRWISE_TASKS.reduce<number[]>((acc, task, idx) => {
+  acc.push(idx === 0 ? 0 : acc[idx - 1] + PAIRWISE_TASKS[idx - 1].pairCount)
+  return acc
+}, [])
 
 interface VideoPair {
   video_id_1: string
@@ -33,6 +106,12 @@ const COMPARISON_SCALE = [
 export default function PairwiseReview() {
   const navigate = useNavigate()
   const { t } = useLanguage()
+  const { user } = useAuth()
+  const useDemo = user?.id === 'guest' || user?.role === 'rater'
+
+  // Task selection (for rater/demo users)
+  const [selectedTask, setSelectedTask] = useState<PairwiseTask | null>(null)
+
   const [pair, setPair] = useState<VideoPair | null>(null)
   const [stats, setStats] = useState<any>(null)
   const [ranking, setRanking] = useState<any>(null)
@@ -69,6 +148,13 @@ export default function PairwiseReview() {
   const [showFeedback, setShowFeedback] = useState(false)
 
   useEffect(() => {
+    if (useDemo) {
+      // Rater / demo users skip tutorial & live API calls — show task selection
+      setInTutorial(false)
+      setTutorialLoading(false)
+      setLoading(false)
+      return
+    }
     // Check if user has completed tutorial
     const tutorialComplete = localStorage.getItem('pairwise_tutorial_complete')
     if (tutorialComplete === 'true') {
@@ -80,7 +166,7 @@ export default function PairwiseReview() {
       loadTutorialExamples()
     }
     loadStats()
-  }, [])
+  }, [useDemo])
 
   const loadTutorialExamples = async () => {
     setTutorialLoading(true)
@@ -165,6 +251,44 @@ export default function PairwiseReview() {
     setShowFeedback(false)
     setFeedbackResult(null)
     setIsPlaying(true)
+    setLoading(false)
+  }
+
+  const handleTaskSelect = (task: PairwiseTask) => {
+    const allPairs = getValidDemoPairs()
+    if (allPairs.length === 0) return
+
+    const offset = TASK_OFFSETS[task.id - 1]
+    const taskPairs: DemoConsensusPair[] = []
+    for (let i = 0; i < task.pairCount; i++) {
+      taskPairs.push(allPairs[(offset + i) % allPairs.length])
+    }
+
+    setSelectedTask(task)
+    setDemoMode(true)
+    setInTutorial(false)
+    setTutorialLoading(false)
+    localStorage.setItem('pairwise_tutorial_complete', 'true')
+    setDemoPairs(taskPairs)
+    setDemoPair(taskPairs[0])
+    setDemoIndex(0)
+    setShowDemoComplete(false)
+    setShowFeedback(false)
+    setFeedbackResult(null)
+    setIsPlaying(true)
+    setLoading(false)
+  }
+
+  const handleBackToTasks = () => {
+    setSelectedTask(null)
+    setDemoMode(false)
+    setDemoPairs([])
+    setDemoPair(null)
+    setDemoIndex(0)
+    setShowDemoComplete(false)
+    setShowFeedback(false)
+    setFeedbackResult(null)
+    setIsPlaying(false)
     setLoading(false)
   }
 
@@ -364,6 +488,113 @@ export default function PairwiseReview() {
     setShowShareModal(true)
   }
 
+  // ── Task Selection Screen (rater / demo users) ───────────────────────────
+  if (useDemo && !selectedTask && !demoMode) {
+    const completedTaskIds: number[] = JSON.parse(
+      localStorage.getItem('pairwise_completed_tasks') ?? '[]'
+    )
+    return (
+      <div className="max-w-4xl mx-auto space-y-8 animate-fade-in">
+        {/* Header */}
+        <div className="text-center">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-primary to-primary/60 mb-4 shadow-lg shadow-primary/20">
+            <span className="text-3xl">🐄</span>
+          </div>
+          <h1 className="text-3xl font-bold mb-2">Pairwise Comparison Tasks</h1>
+          <p className="text-muted-foreground max-w-lg mx-auto">
+            Select a task to start comparing cow walking videos. Each task contains a set of video pairs from the same farm session.
+          </p>
+        </div>
+
+        {/* Task Cards */}
+        <div className="grid sm:grid-cols-2 gap-5">
+          {PAIRWISE_TASKS.map((task, i) => {
+            const isCompleted = completedTaskIds.includes(task.id)
+            const progressPct = Math.round((task.completedPeople / task.requiredPeople) * 100)
+            return (
+              <div
+                key={task.id}
+                className={cn(
+                  "relative rounded-2xl border bg-card p-6 flex flex-col gap-4 cursor-pointer",
+                  "transition-all duration-200 hover:shadow-xl hover:-translate-y-0.5 hover:border-primary/40",
+                  "animate-slide-in-up",
+                  isCompleted ? "border-emerald-500/40" : "border-border"
+                )}
+                style={{ animationDelay: `${i * 0.08}s`, animationFillMode: 'backwards' }}
+                onClick={() => handleTaskSelect(task)}
+              >
+                {/* Completed badge */}
+                {isCompleted && (
+                  <div className="absolute top-4 right-4 flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-500 text-xs font-medium">
+                    ✓ Completed
+                  </div>
+                )}
+
+                {/* Title row */}
+                <div className="flex items-start gap-4">
+                  <div className={cn(
+                    "w-12 h-12 rounded-xl flex items-center justify-center shrink-0 bg-gradient-to-br",
+                    task.color
+                  )}>
+                    <span className="text-xl text-white font-bold">{task.id}</span>
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold">{task.name}</h3>
+                    <p className="text-sm text-muted-foreground">{task.description}</p>
+                  </div>
+                </div>
+
+                {/* Stats row */}
+                <div className="flex items-center gap-3">
+                  <span className={cn(
+                    "px-2.5 py-1 rounded-lg text-xs font-semibold",
+                    task.bgColor, task.textColor
+                  )}>
+                    {task.pairCount} pairs
+                  </span>
+                  <span className="text-xs text-muted-foreground">·</span>
+                  <span className="text-xs text-muted-foreground">
+                    {task.completedPeople}/{task.requiredPeople} raters completed
+                  </span>
+                </div>
+
+                {/* Progress bar */}
+                <div>
+                  <div className="flex justify-between text-xs text-muted-foreground mb-1.5">
+                    <span>Completion</span>
+                    <span className="font-medium text-foreground">{progressPct}%</span>
+                  </div>
+                  <div className="h-2 rounded-full bg-muted overflow-hidden">
+                    <div
+                      className={cn("h-full rounded-full bg-gradient-to-r transition-all duration-700", task.color)}
+                      style={{ width: `${progressPct}%` }}
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1.5">
+                    {task.completedPeople}/{task.requiredPeople} people have completed this task
+                  </p>
+                </div>
+
+                {/* CTA */}
+                <button
+                  className={cn(
+                    "mt-auto w-full py-2.5 rounded-xl font-medium text-sm transition-colors",
+                    isCompleted
+                      ? "bg-emerald-500/15 text-emerald-500 hover:bg-emerald-500/25"
+                      : "bg-primary text-primary-foreground hover:bg-primary/90"
+                  )}
+                  onClick={(e) => { e.stopPropagation(); handleTaskSelect(task) }}
+                >
+                  {isCompleted ? 'Redo Task' : 'Start Task →'}
+                </button>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    )
+  }
+
   // Tutorial UI
   if (inTutorial) {
     // Show loading state while fetching tutorial examples
@@ -550,6 +781,16 @@ export default function PairwiseReview() {
   }
 
   if (showDemoComplete) {
+    // Mark this task as completed in localStorage
+    if (selectedTask) {
+      const completed: number[] = JSON.parse(
+        localStorage.getItem('pairwise_completed_tasks') ?? '[]'
+      )
+      if (!completed.includes(selectedTask.id)) {
+        localStorage.setItem('pairwise_completed_tasks', JSON.stringify([...completed, selectedTask.id]))
+      }
+    }
+
     return (
       <div className="text-center py-12 relative">
         {/* Confetti effect */}
@@ -572,11 +813,21 @@ export default function PairwiseReview() {
         
         <div className="relative z-10">
           <div className="text-6xl mb-4 animate-bounce">🎉</div>
-          <h2 className="text-3xl font-bold mb-4">Successfully Submitted!</h2>
-          <p className="text-muted-foreground mb-8">
-            You've completed all 3 demo comparisons. Great work!
+          <h2 className="text-3xl font-bold mb-4">Task Complete!</h2>
+          <p className="text-muted-foreground mb-2">
+            You've finished all {selectedTask?.pairCount ?? demoPairs.length} comparisons
+            {selectedTask ? ` for ${selectedTask.name}` : ''}.
           </p>
-          <div className="flex gap-4 justify-center">
+          <p className="text-muted-foreground mb-8">Great work — your responses help improve lameness detection!</p>
+          <div className="flex gap-4 justify-center flex-wrap">
+            {useDemo && (
+              <button
+                onClick={handleBackToTasks}
+                className="px-6 py-3 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90"
+              >
+                ← Back to Tasks
+              </button>
+            )}
             <button
               onClick={() => {
                 setShowDemoComplete(false)
@@ -584,20 +835,23 @@ export default function PairwiseReview() {
                 setDemoIndex(0)
                 setDemoPairs([])
                 setDemoPair(null)
+                if (!useDemo) setSelectedTask(null)
               }}
               className="px-6 py-3 border border-primary text-primary rounded-lg hover:bg-primary/10"
             >
               Exit Demo
             </button>
-            <button
-              onClick={() => {
-                setShowDemoComplete(false)
-                enableDemoMode()
-              }}
-              className="px-6 py-3 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90"
-            >
-              Try Again
-            </button>
+            {!useDemo && (
+              <button
+                onClick={() => {
+                  setShowDemoComplete(false)
+                  enableDemoMode()
+                }}
+                className="px-6 py-3 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90"
+              >
+                Try Again
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -640,10 +894,18 @@ export default function PairwiseReview() {
             {t('pairwise.subtitle')}
           </p>
           {demoMode && (
-            <div className="mt-2">
+            <div className="mt-2 flex items-center gap-2 flex-wrap">
               <span className="px-3 py-1 bg-warning/20 text-warning rounded-full text-xs font-medium">
-                🎯 Demo Mode — Pair {demoIndex + 1} / {demoPairs.length}
+                🎯 {selectedTask ? selectedTask.name : 'Demo'} — Pair {demoIndex + 1} / {demoPairs.length}
               </span>
+              {selectedTask && (
+                <button
+                  onClick={handleBackToTasks}
+                  className="px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground border border-border rounded-full transition-colors"
+                >
+                  ← Tasks
+                </button>
+              )}
             </div>
           )}
         </div>

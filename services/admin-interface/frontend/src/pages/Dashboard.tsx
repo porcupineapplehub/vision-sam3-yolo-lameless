@@ -2,14 +2,14 @@
  * Dashboard Page
  * Premium overview with modern metric cards and data visualization
  */
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef, Fragment } from 'react'
 import { Link } from 'react-router-dom'
 import { cn } from '@/lib/utils'
 import { videosApi, trainingApi } from '@/api/client'
-import { getDemoCows } from '@/utils/demoData'
+import { useAuth } from '@/contexts/AuthContext'
+import { getCowRankings, getConsensusData, type CowRanking } from '@/utils/pairwiseConsensus'
 import {
   TrendingUp,
-  TrendingDown,
   Video,
   BarChart3,
   Tag,
@@ -21,30 +21,40 @@ import {
   Activity,
   Target,
   Zap,
-  Loader2,
   Upload,
   PlayCircle,
   AlertCircle,
-  ChevronRight
+  ChevronRight,
+  Trophy,
+  ChevronDown,
+  ChevronUp,
+  X,
 } from 'lucide-react'
 
 export default function Dashboard() {
+  const { user } = useAuth()
+  const isGuest = user?.id === 'guest'
+  const useDemo = isGuest || user?.role === 'rater'
+
   const [videos, setVideos] = useState<any[]>([])
   const [stats, setStats] = useState<any>(null)
   const [trainingStatus, setTrainingStatus] = useState<any>(null)
   const [pairwiseStats, setPairwiseStats] = useState<any>(null)
+  const [topLameCows, setTopLameCows] = useState<CowRanking[]>([])
   const [loading, setLoading] = useState(true)
-  const [demoMode, setDemoMode] = useState(false)
+  const [expandedCowId, setExpandedCowId] = useState<string | null>(null)
+  const [resultsModalCow, setResultsModalCow] = useState<CowRanking | null>(null)
+  const allRankings = useRef<CowRanking[]>([])
 
   useEffect(() => {
-    loadData()
-  }, [demoMode])
+    if (useDemo) {
+      loadDemoData()
+    } else {
+      loadData()
+    }
+  }, [useDemo])
 
   const loadData = async () => {
-    if (demoMode) {
-      loadDemoData()
-      return
-    }
     
     try {
       const [videoData, statsData, statusData, pairwiseData] = await Promise.all([
@@ -65,32 +75,45 @@ export default function Dashboard() {
   }
 
   const loadDemoData = () => {
-    const demoCows = getDemoCows()
-    
-    // Create demo videos from demo cows
-    const demoVideos = demoCows.map((cow, idx) => ({
-      video_id: cow.id,
-      filename: `cow_${cow.id}_demo.mp4`,
-      file_size: Math.floor(Math.random() * 50 + 10) * 1024 * 1024, // 10-60 MB
-      has_analysis: idx < 8,
-      has_annotated: idx < 6,
-      has_label: idx < 9,
-      label: cow.severity === 'severe' || cow.severity === 'moderate' ? 1 : 0,
-      storage_backend: 's3',
-      s3_url: cow.videoUrl
+    // Derive everything from the real pairwise comparison CSV
+    const rankings = getCowRankings()
+    const consensus = getConsensusData()
+
+    const totalJudgments = Array.from(consensus.values())
+      .reduce((s, p) => s + p.count, 0)
+    const pairsCompared = consensus.size
+    // 30 cows in our dataset → 30*29/2 = 435 possible pairs
+    const totalPossible = (rankings.length * (rankings.length - 1)) / 2
+
+    allRankings.current = rankings
+
+    // Build synthetic "video" rows so the table isn't empty
+    const demoVideos = rankings.map((r) => ({
+      video_id: r.cowId,
+      filename: `cow_${r.cowId}.mp4`,
+      file_size: 350 * 1024,
+      has_analysis: true,
+      has_annotated: true,
+      has_label: true,
+      label: r.severity === 'severe' || r.severity === 'moderate' ? 1 : 0,
+      storage_backend: 'local',
+      rank: r.rank,
+      videoUrl: r.videoUrl || '',
+      severity: r.severity,
     }))
-    
+
     setVideos(demoVideos)
+    setTopLameCows(rankings.slice(0, 5))
     setPairwiseStats({
-      pairs_compared: 15,
-      total_possible_pairs: 66,
-      completion_rate: 0.23,
-      total_comparisons: 15
+      pairs_compared: pairsCompared,
+      total_possible_pairs: totalPossible,
+      completion_rate: pairsCompared / totalPossible,
+      total_comparisons: totalJudgments,
     })
     setTrainingStatus({
       status: 'completed',
       last_trained: new Date().toISOString(),
-      samples_used: 42
+      samples_used: totalJudgments,
     })
     setLoading(false)
   }
@@ -115,10 +138,9 @@ export default function Dashboard() {
   const soundCount = videos.filter(v => v.label === 0).length
   const lameCount = videos.filter(v => v.label === 1).length
   const analyzedCount = videos.filter(v => v.has_analysis).length
-  const annotatedCount = videos.filter(v => v.has_annotated).length
   const pendingCount = videos.filter(v => !v.has_label).length
 
-  const metrics = [
+  const allMetrics = [
     {
       label: 'Total Videos',
       value: videos.length,
@@ -127,6 +149,7 @@ export default function Dashboard() {
       color: 'from-blue-500 to-blue-600',
       bgColor: 'bg-blue-500/10',
       textColor: 'text-blue-500',
+      raterOnly: false,
     },
     {
       label: 'Analyzed',
@@ -137,6 +160,7 @@ export default function Dashboard() {
       color: 'from-violet-500 to-violet-600',
       bgColor: 'bg-violet-500/10',
       textColor: 'text-violet-500',
+      raterOnly: true,
     },
     {
       label: 'Labeled',
@@ -147,6 +171,7 @@ export default function Dashboard() {
       color: 'from-amber-500 to-amber-600',
       bgColor: 'bg-amber-500/10',
       textColor: 'text-amber-500',
+      raterOnly: true,
     },
     {
       label: 'Sound',
@@ -156,6 +181,7 @@ export default function Dashboard() {
       color: 'from-emerald-500 to-emerald-600',
       bgColor: 'bg-emerald-500/10',
       textColor: 'text-emerald-500',
+      raterOnly: false,
     },
     {
       label: 'Lame',
@@ -165,6 +191,7 @@ export default function Dashboard() {
       color: 'from-rose-500 to-rose-600',
       bgColor: 'bg-rose-500/10',
       textColor: 'text-rose-500',
+      raterOnly: false,
     },
     {
       label: 'Pending',
@@ -174,10 +201,14 @@ export default function Dashboard() {
       color: 'from-slate-500 to-slate-600',
       bgColor: 'bg-slate-500/10',
       textColor: 'text-slate-500',
+      raterOnly: false,
     },
   ]
+  // Raters see a simplified view without Analyzed / Labeled stats
+  const metrics = useDemo ? allMetrics.filter(m => !m.raterOnly) : allMetrics
 
   return (
+    <>
     <div className="space-y-8">
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
@@ -186,43 +217,36 @@ export default function Dashboard() {
             Dashboard
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-primary/10 text-primary text-sm font-medium">
               <Sparkles className="h-3.5 w-3.5" />
-              {demoMode ? 'Demo' : 'Live'}
+              {useDemo ? 'Demo' : 'Live'}
             </span>
           </h1>
           <p className="text-muted-foreground mt-1">
             Overview of your lameness detection research pipeline
           </p>
-          {demoMode && (
+          {useDemo && (
             <div className="mt-2">
               <span className="px-2 py-0.5 bg-warning/20 text-warning rounded-full text-xs font-medium">
-                🎯 Demo Mode - Using demo_cows.csv data
+                🎯 Demo Mode — Data from pairwise comparison CSV
               </span>
             </div>
           )}
         </div>
-        <div className="flex gap-2">
-          {!demoMode && (
-            <button
-              onClick={() => setDemoMode(true)}
-              className="px-4 py-2 border border-primary text-primary rounded-lg hover:bg-primary/10 animate-slide-in-up"
+        {!useDemo && (
+          <div className="flex gap-2">
+            <Link
+              to="/upload"
+              className="btn-premium inline-flex items-center gap-2 animate-slide-in-up"
               style={{ animationDelay: '0.1s' }}
             >
-              Load Demo Data
-            </button>
-          )}
-          <Link
-            to="/upload"
-            className="btn-premium inline-flex items-center gap-2 animate-slide-in-up"
-            style={{ animationDelay: '0.1s' }}
-          >
-            <Upload className="h-4 w-4" />
-            Upload Videos
-          </Link>
-        </div>
+              <Upload className="h-4 w-4" />
+              Upload Videos
+            </Link>
+          </div>
+        )}
       </div>
 
       {/* Metrics Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+      <div className={cn("grid gap-4", useDemo ? "grid-cols-2 md:grid-cols-4" : "grid-cols-2 md:grid-cols-3 lg:grid-cols-6")}>
         {metrics.map((metric, i) => (
           <div
             key={metric.label}
@@ -250,7 +274,7 @@ export default function Dashboard() {
       </div>
 
       {/* Main Content Grid */}
-      <div className="grid lg:grid-cols-3 gap-6">
+      <div className={cn("grid gap-6", useDemo ? "lg:grid-cols-2" : "lg:grid-cols-3")}>
         {/* Pairwise Comparison Progress */}
         <div className="premium-card animate-slide-in-up" style={{ animationDelay: '0.3s', animationFillMode: 'backwards' }}>
           <div className="flex items-center gap-3 mb-4">
@@ -302,114 +326,160 @@ export default function Dashboard() {
           )}
         </div>
 
-        {/* Training Status */}
-        <div className="premium-card animate-slide-in-up" style={{ animationDelay: '0.4s', animationFillMode: 'backwards' }}>
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-violet-600 flex items-center justify-center shadow-lg shadow-violet-500/20">
-              <Zap className="h-5 w-5 text-white" />
+        {/* Training Status — hidden for rater/demo view */}
+        {!useDemo && (
+          <div className="premium-card animate-slide-in-up" style={{ animationDelay: '0.4s', animationFillMode: 'backwards' }}>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-violet-600 flex items-center justify-center shadow-lg shadow-violet-500/20">
+                <Zap className="h-5 w-5 text-white" />
+              </div>
+              <div>
+                <h3 className="font-semibold">Training Status</h3>
+                <p className="text-xs text-muted-foreground">ML model training</p>
+              </div>
             </div>
-            <div>
-              <h3 className="font-semibold">Training Status</h3>
-              <p className="text-xs text-muted-foreground">ML model training</p>
-            </div>
-          </div>
-          
-          {trainingStatus ? (
-            <>
-              <div className="space-y-3 mb-4">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-muted-foreground">Status</span>
-                  <span className={cn(
-                    "px-2.5 py-1 rounded-lg text-xs font-medium capitalize",
-                    trainingStatus.status === 'completed' 
-                      ? 'bg-emerald-500/15 text-emerald-500' 
-                      : trainingStatus.status === 'training' 
-                        ? 'bg-blue-500/15 text-blue-500' 
-                        : 'bg-muted text-muted-foreground'
-                  )}>
-                    {trainingStatus.status}
-                  </span>
-                </div>
-                {trainingStatus.last_trained && (
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Last Trained</span>
-                    <span className="font-medium">
-                      {new Date(trainingStatus.last_trained).toLocaleDateString()}
+            
+            {trainingStatus ? (
+              <>
+                <div className="space-y-3 mb-4">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-muted-foreground">Status</span>
+                    <span className={cn(
+                      "px-2.5 py-1 rounded-lg text-xs font-medium capitalize",
+                      trainingStatus.status === 'completed' 
+                        ? 'bg-emerald-500/15 text-emerald-500' 
+                        : trainingStatus.status === 'training' 
+                          ? 'bg-blue-500/15 text-blue-500' 
+                          : 'bg-muted text-muted-foreground'
+                    )}>
+                      {trainingStatus.status}
                     </span>
                   </div>
-                )}
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Samples Used</span>
-                  <span className="font-medium">{trainingStatus.samples_used}</span>
+                  {trainingStatus.last_trained && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Last Trained</span>
+                      <span className="font-medium">
+                        {new Date(trainingStatus.last_trained).toLocaleDateString()}
+                      </span>
+                    </div>
+                  )}
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Samples Used</span>
+                    <span className="font-medium">{trainingStatus.samples_used}</span>
+                  </div>
+                </div>
+                <Link
+                  to="/training"
+                  className="flex items-center justify-between p-3 rounded-xl bg-muted/50 hover:bg-muted transition-colors group"
+                >
+                  <span className="text-sm font-medium">Manage Training</span>
+                  <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:translate-x-1 transition-transform" />
+                </Link>
+              </>
+            ) : (
+              <div className="text-center py-6">
+                <div className="w-12 h-12 rounded-full bg-muted mx-auto flex items-center justify-center mb-3">
+                  <Zap className="h-6 w-6 text-muted-foreground" />
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Training status unavailable
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Top Lame Cows (demo) / Needs Attention (live) */}
+        <div className="premium-card animate-slide-in-up" style={{ animationDelay: '0.5s', animationFillMode: 'backwards' }}>
+          {useDemo && topLameCows.length > 0 ? (
+            <>
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-rose-500 to-rose-600 flex items-center justify-center shadow-lg shadow-rose-500/20">
+                  <Trophy className="h-5 w-5 text-white" />
+                </div>
+                <div>
+                  <h3 className="font-semibold">Most Lame</h3>
+                  <p className="text-xs text-muted-foreground">Top 5 by pairwise consensus</p>
                 </div>
               </div>
+              <div className="space-y-2">
+                {topLameCows.map((cow, i) => (
+                  <div key={cow.cowId} className="flex items-center gap-3 p-2.5 rounded-xl bg-muted/50">
+                    <span className="text-sm font-bold w-6 text-center text-muted-foreground">
+                      {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `#${i + 1}`}
+                    </span>
+                    <span className="font-mono text-sm font-medium flex-1">{cow.cowId}</span>
+                    <span className={cn(
+                      'px-2 py-0.5 rounded-md text-xs font-medium capitalize',
+                      cow.severity === 'severe'   ? 'bg-red-500/15 text-red-500' :
+                      cow.severity === 'moderate' ? 'bg-orange-500/15 text-orange-500' :
+                      cow.severity === 'mild'     ? 'bg-amber-500/15 text-amber-500' :
+                                                    'bg-emerald-500/15 text-emerald-500'
+                    )}>
+                      {cow.severity}
+                    </span>
+                    <span className="text-xs text-muted-foreground font-mono w-12 text-right">
+                      {(cow.normalizedScore * 100).toFixed(0)}%
+                    </span>
+                  </div>
+                ))}
+              </div>
               <Link
-                to="/training"
-                className="flex items-center justify-between p-3 rounded-xl bg-muted/50 hover:bg-muted transition-colors group"
+                to="/cows"
+                className="flex items-center justify-between p-3 rounded-xl bg-muted/50 hover:bg-muted transition-colors group mt-3"
               >
-                <span className="text-sm font-medium">Manage Training</span>
+                <span className="text-sm font-medium">View Full Registry</span>
                 <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:translate-x-1 transition-transform" />
               </Link>
             </>
           ) : (
-            <div className="text-center py-6">
-              <div className="w-12 h-12 rounded-full bg-muted mx-auto flex items-center justify-center mb-3">
-                <Zap className="h-6 w-6 text-muted-foreground" />
-              </div>
-              <p className="text-sm text-muted-foreground">
-                Training status unavailable
-              </p>
-            </div>
-          )}
-        </div>
-
-        {/* Needs Attention */}
-        <div className="premium-card animate-slide-in-up" style={{ animationDelay: '0.5s', animationFillMode: 'backwards' }}>
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-amber-600 flex items-center justify-center shadow-lg shadow-amber-500/20">
-              <AlertCircle className="h-5 w-5 text-white" />
-            </div>
-            <div>
-              <h3 className="font-semibold">Needs Attention</h3>
-              <p className="text-xs text-muted-foreground">Videos requiring labels</p>
-            </div>
-          </div>
-          
-          {pendingCount > 0 ? (
             <>
-              <p className="text-sm text-muted-foreground mb-3">
-                <span className="font-semibold text-foreground">{pendingCount}</span> videos need labeling
-              </p>
-              <div className="space-y-2">
-                {videos.filter(v => !v.has_label).slice(0, 3).map((video) => (
-                  <Link
-                    key={video.video_id}
-                    to={`/video/${video.video_id}`}
-                    className="flex items-center gap-3 p-2.5 rounded-xl bg-muted/50 hover:bg-muted transition-colors group"
-                  >
-                    <div className="w-8 h-8 rounded-lg bg-background flex items-center justify-center flex-shrink-0">
-                      <PlayCircle className="h-4 w-4 text-muted-foreground" />
-                    </div>
-                    <span className="text-sm truncate flex-1">{video.filename}</span>
-                    <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
-                  </Link>
-                ))}
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-amber-600 flex items-center justify-center shadow-lg shadow-amber-500/20">
+                  <AlertCircle className="h-5 w-5 text-white" />
+                </div>
+                <div>
+                  <h3 className="font-semibold">Needs Attention</h3>
+                  <p className="text-xs text-muted-foreground">Videos requiring labels</p>
+                </div>
               </div>
-              {pendingCount > 3 && (
-                <p className="text-xs text-muted-foreground text-center mt-3">
-                  +{pendingCount - 3} more videos
-                </p>
+              {pendingCount > 0 ? (
+                <>
+                  <p className="text-sm text-muted-foreground mb-3">
+                    <span className="font-semibold text-foreground">{pendingCount}</span> videos need labeling
+                  </p>
+                  <div className="space-y-2">
+                    {videos.filter(v => !v.has_label).slice(0, 3).map((video) => (
+                      <Link
+                        key={video.video_id}
+                        to={`/video/${video.video_id}`}
+                        className="flex items-center gap-3 p-2.5 rounded-xl bg-muted/50 hover:bg-muted transition-colors group"
+                      >
+                        <div className="w-8 h-8 rounded-lg bg-background flex items-center justify-center flex-shrink-0">
+                          <PlayCircle className="h-4 w-4 text-muted-foreground" />
+                        </div>
+                        <span className="text-sm truncate flex-1">{video.filename}</span>
+                        <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                      </Link>
+                    ))}
+                  </div>
+                  {pendingCount > 3 && (
+                    <p className="text-xs text-muted-foreground text-center mt-3">
+                      +{pendingCount - 3} more videos
+                    </p>
+                  )}
+                </>
+              ) : (
+                <div className="text-center py-6">
+                  <div className="w-12 h-12 rounded-full bg-emerald-500/15 mx-auto flex items-center justify-center mb-3">
+                    <CheckCircle2 className="h-6 w-6 text-emerald-500" />
+                  </div>
+                  <p className="text-sm text-emerald-500 font-medium">
+                    All videos are labeled!
+                  </p>
+                </div>
               )}
             </>
-          ) : (
-            <div className="text-center py-6">
-              <div className="w-12 h-12 rounded-full bg-emerald-500/15 mx-auto flex items-center justify-center mb-3">
-                <CheckCircle2 className="h-6 w-6 text-emerald-500" />
-              </div>
-              <p className="text-sm text-emerald-500 font-medium">
-                All videos are labeled!
-              </p>
-            </div>
           )}
         </div>
       </div>
@@ -417,9 +487,9 @@ export default function Dashboard() {
       {/* Recent Videos */}
       <div className="animate-slide-in-up" style={{ animationDelay: '0.6s', animationFillMode: 'backwards' }}>
         <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-semibold">Recent Videos</h2>
+          <h2 className="text-xl font-semibold">{useDemo ? 'Cow Lameness Ranking' : 'Recent Videos'}</h2>
           <span className="text-sm text-muted-foreground">
-            Showing {Math.min(10, videos.length)} of {videos.length}
+            Showing {Math.min(10, videos.length)} of {videos.length} {useDemo ? 'cows' : 'videos'}
           </span>
         </div>
         
@@ -446,81 +516,176 @@ export default function Dashboard() {
               <table className="premium-table">
                 <thead>
                   <tr>
-                    <th>Video</th>
+                    {useDemo && <th className="w-12 text-center">Rank</th>}
+                    <th>Cow</th>
                     <th>Status</th>
                     <th>Label</th>
-                    <th>Size</th>
+                    {!useDemo && <th>Size</th>}
                     <th></th>
                   </tr>
                 </thead>
                 <tbody>
-                  {videos.slice(0, 10).map((video, i) => (
-                    <tr 
-                      key={video.video_id}
-                      className="animate-fade-in"
-                      style={{ animationDelay: `${i * 0.03}s`, animationFillMode: 'backwards' }}
-                    >
-                      <td>
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center flex-shrink-0">
-                            <PlayCircle className="h-5 w-5 text-muted-foreground" />
-                          </div>
-                          <div>
-                            <div className="font-medium truncate max-w-[200px]">{video.filename}</div>
-                            <div className="text-xs text-muted-foreground font-mono">
-                              {video.video_id.slice(0, 8)}...
+                  {videos.slice(0, 10).map((video, i) => {
+                    const isExpanded = expandedCowId === video.video_id
+                    return (
+                      <Fragment key={video.video_id}>
+                        <tr
+                          className="animate-fade-in"
+                          style={{ animationDelay: `${i * 0.03}s`, animationFillMode: 'backwards' }}
+                        >
+                          {useDemo && (
+                            <td className="text-center">
+                              <span className="text-sm font-bold text-muted-foreground">
+                                {video.rank === 1 ? '🥇' : video.rank === 2 ? '🥈' : video.rank === 3 ? '🥉' : `#${video.rank}`}
+                              </span>
+                            </td>
+                          )}
+                          <td>
+                            <div className="flex items-center gap-3">
+                              <button
+                                onClick={() => setExpandedCowId(isExpanded ? null : video.video_id)}
+                                className="relative w-12 h-9 rounded-lg overflow-hidden flex-shrink-0 border border-border/50 hover:border-primary/50 transition-colors group"
+                                title={isExpanded ? 'Collapse' : 'Preview video'}
+                              >
+                                {video.videoUrl ? (
+                                  <video
+                                    src={`${video.videoUrl}#t=4`}
+                                    muted
+                                    playsInline
+                                    preload="metadata"
+                                    className="w-full h-full object-cover"
+                                  />
+                                ) : (
+                                  <div className="w-full h-full bg-muted flex items-center justify-center">
+                                    <PlayCircle className="h-4 w-4 text-muted-foreground" />
+                                  </div>
+                                )}
+                                <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                  {isExpanded
+                                    ? <ChevronUp className="h-3 w-3 text-white" />
+                                    : <PlayCircle className="h-3 w-3 text-white" />
+                                  }
+                                </div>
+                              </button>
+                              <div>
+                                <div className="font-medium font-mono">{video.video_id}</div>
+                                <div className="text-xs text-muted-foreground">
+                                  {useDemo ? 'pairwise comparison' : video.filename}
+                                </div>
+                              </div>
                             </div>
-                          </div>
-                        </div>
-                      </td>
-                      <td>
-                        <div className="flex gap-1.5 flex-wrap">
-                          {video.has_analysis && (
-                            <span className="badge badge-primary">Analyzed</span>
+                          </td>
+                          <td>
+                            <div className="flex gap-1.5 flex-wrap">
+                              {useDemo ? (
+                                video.has_annotated && (
+                                  <span className="badge bg-violet-500/15 text-violet-500">Annotated</span>
+                                )
+                              ) : (
+                                <>
+                                  {video.has_analysis && (
+                                    <span className="badge badge-primary">Analyzed</span>
+                                  )}
+                                  {video.has_annotated && (
+                                    <span className="badge bg-violet-500/15 text-violet-500">Annotated</span>
+                                  )}
+                                  {!video.has_analysis && !video.has_annotated && (
+                                    <span className="badge badge-muted">Pending</span>
+                                  )}
+                                </>
+                              )}
+                            </div>
+                          </td>
+                          <td>
+                            {video.has_label ? (
+                              <span className={cn(
+                                "badge",
+                                video.label === 0 ? 'badge-success' : 'badge-destructive'
+                              )}>
+                                {video.label === 0 ? 'Sound' : 'Lame'}
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground text-xs">Unlabeled</span>
+                            )}
+                          </td>
+                          {!useDemo && (
+                            <td className="text-muted-foreground">
+                              {(video.file_size / 1024 / 1024).toFixed(1)} MB
+                            </td>
                           )}
-                          {video.has_annotated && (
-                            <span className="badge bg-violet-500/15 text-violet-500">Annotated</span>
-                          )}
-                          {!video.has_analysis && !video.has_annotated && (
-                            <span className="badge badge-muted">Pending</span>
-                          )}
-                        </div>
-                      </td>
-                      <td>
-                        {video.has_label ? (
-                          <span className={cn(
-                            "badge",
-                            video.label === 0 ? 'badge-success' : 'badge-destructive'
-                          )}>
-                            {video.label === 0 ? 'Sound' : 'Lame'}
-                          </span>
-                        ) : (
-                          <span className="text-muted-foreground text-xs">Unlabeled</span>
+                          <td className="text-right">
+                            <div className="flex gap-2 justify-end">
+                              <Link
+                                to={useDemo ? `/cows/${video.video_id}` : `/video/${video.video_id}`}
+                                className="px-3 py-1.5 text-xs font-medium rounded-lg bg-muted hover:bg-muted/80 transition-colors"
+                              >
+                                View
+                              </Link>
+                              {useDemo ? (
+                                <button
+                                  onClick={() => {
+                                    const ranking = allRankings.current.find(r => r.cowId === video.video_id)
+                                    if (ranking) setResultsModalCow(ranking)
+                                  }}
+                                  className="px-3 py-1.5 text-xs font-medium rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+                                >
+                                  Results
+                                </button>
+                              ) : (
+                                video.has_analysis && (
+                                  <Link
+                                    to={`/results/${video.video_id}`}
+                                    className="px-3 py-1.5 text-xs font-medium rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+                                  >
+                                    Results
+                                  </Link>
+                                )
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                        {isExpanded && (
+                          <tr className="bg-muted/30">
+                            <td colSpan={useDemo ? 5 : 5} className="p-4">
+                              <div className="flex items-start gap-4">
+                                {video.videoUrl ? (
+                                  <video
+                                    src={video.videoUrl}
+                                    controls
+                                    autoPlay
+                                    muted
+                                    playsInline
+                                    className="rounded-xl border border-border/50 max-h-52 max-w-xs object-contain bg-black"
+                                  />
+                                ) : (
+                                  <div className="w-48 h-32 rounded-xl bg-muted flex items-center justify-center">
+                                    <span className="text-xs text-muted-foreground">No video available</span>
+                                  </div>
+                                )}
+                                <div className="flex-1 min-w-0">
+                                  <div className="font-semibold font-mono text-base mb-1">Cow {video.video_id}</div>
+                                  <div className="flex gap-2 flex-wrap mb-3">
+                                    <span className={cn("badge", video.label === 0 ? 'badge-success' : 'badge-destructive')}>
+                                      {video.label === 0 ? 'Sound' : 'Lame'}
+                                    </span>
+                                    {useDemo && video.severity && (
+                                      <span className="badge badge-muted capitalize">{video.severity}</span>
+                                    )}
+                                    {useDemo && (
+                                      <span className="badge bg-muted text-muted-foreground">Rank #{video.rank}</span>
+                                    )}
+                                  </div>
+                                  <p className="text-xs text-muted-foreground">
+                                    Click <strong>Results</strong> to see pairwise comparison history, or <strong>View</strong> to open the full detail page.
+                                  </p>
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
                         )}
-                      </td>
-                      <td className="text-muted-foreground">
-                        {(video.file_size / 1024 / 1024).toFixed(1)} MB
-                      </td>
-                      <td className="text-right">
-                        <div className="flex gap-2 justify-end">
-                          <Link
-                            to={`/video/${video.video_id}`}
-                            className="px-3 py-1.5 text-xs font-medium rounded-lg bg-muted hover:bg-muted/80 transition-colors"
-                          >
-                            View
-                          </Link>
-                          {video.has_analysis && (
-                            <Link
-                              to={`/results/${video.video_id}`}
-                              className="px-3 py-1.5 text-xs font-medium rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
-                            >
-                              Results
-                            </Link>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                      </Fragment>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>
@@ -528,5 +693,107 @@ export default function Dashboard() {
         )}
       </div>
     </div>
+
+    {/* Pairwise Results Modal */}
+    {resultsModalCow && (
+
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+        onClick={() => setResultsModalCow(null)}
+      >
+        <div
+          className="premium-card w-full max-w-md p-6 relative animate-fade-in"
+          onClick={e => e.stopPropagation()}
+        >
+          <button
+            onClick={() => setResultsModalCow(null)}
+            className="absolute top-4 right-4 p-1 rounded-lg hover:bg-muted transition-colors"
+          >
+            <X className="h-4 w-4" />
+          </button>
+
+          <div className="flex items-center gap-3 mb-5">
+            <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+              <Trophy className="h-5 w-5 text-primary" />
+            </div>
+            <div>
+              <h3 className="font-semibold text-base">Cow {resultsModalCow.cowId}</h3>
+              <p className="text-xs text-muted-foreground">Pairwise rating results</p>
+            </div>
+          </div>
+
+          {/* Rank & Score */}
+          <div className="grid grid-cols-2 gap-3 mb-5">
+            <div className="rounded-xl bg-muted/50 p-3 text-center">
+              <div className="text-2xl font-bold">
+                {resultsModalCow.rank === 1 ? '🥇' : resultsModalCow.rank === 2 ? '🥈' : resultsModalCow.rank === 3 ? '🥉' : `#${resultsModalCow.rank}`}
+              </div>
+              <div className="text-xs text-muted-foreground mt-1">Global Rank</div>
+            </div>
+            <div className="rounded-xl bg-muted/50 p-3 text-center">
+              <div className={cn(
+                "text-2xl font-bold",
+                resultsModalCow.severity === 'severe' ? 'text-red-500' :
+                resultsModalCow.severity === 'moderate' ? 'text-orange-500' :
+                resultsModalCow.severity === 'mild' ? 'text-yellow-500' : 'text-green-500'
+              )}>
+                {Math.round(resultsModalCow.normalizedScore * 100)}%
+              </div>
+              <div className="text-xs text-muted-foreground mt-1 capitalize">{resultsModalCow.severity}</div>
+            </div>
+          </div>
+
+          {/* Lameness score bar */}
+          <div className="mb-5">
+            <div className="flex justify-between text-xs text-muted-foreground mb-1">
+              <span>Lameness score</span>
+              <span>{(resultsModalCow.normalizedScore * 100).toFixed(1)}%</span>
+            </div>
+            <div className="h-2 rounded-full bg-muted overflow-hidden">
+              <div
+                className={cn(
+                  "h-full rounded-full transition-all",
+                  resultsModalCow.severity === 'severe' ? 'bg-red-500' :
+                  resultsModalCow.severity === 'moderate' ? 'bg-orange-500' :
+                  resultsModalCow.severity === 'mild' ? 'bg-yellow-500' : 'bg-green-500'
+                )}
+                style={{ width: `${resultsModalCow.normalizedScore * 100}%` }}
+              />
+            </div>
+          </div>
+
+          {/* Win / Loss / Tie breakdown */}
+          <div className="grid grid-cols-3 gap-2 mb-5">
+            <div className="rounded-xl bg-green-500/10 p-3 text-center">
+              <div className="text-xl font-bold text-green-500">{resultsModalCow.wins}</div>
+              <div className="text-xs text-muted-foreground mt-0.5">Wins</div>
+              <div className="text-[10px] text-muted-foreground">(healthier)</div>
+            </div>
+            <div className="rounded-xl bg-red-500/10 p-3 text-center">
+              <div className="text-xl font-bold text-red-500">{resultsModalCow.losses}</div>
+              <div className="text-xs text-muted-foreground mt-0.5">Losses</div>
+              <div className="text-[10px] text-muted-foreground">(lamer)</div>
+            </div>
+            <div className="rounded-xl bg-muted/50 p-3 text-center">
+              <div className="text-xl font-bold text-muted-foreground">{resultsModalCow.ties}</div>
+              <div className="text-xs text-muted-foreground mt-0.5">Ties</div>
+              <div className="text-[10px] text-muted-foreground">(equal)</div>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between text-xs text-muted-foreground border-t border-border/50 pt-4">
+            <span>{resultsModalCow.comparisons} total judgments</span>
+            <Link
+              to={`/cows/${resultsModalCow.cowId}`}
+              onClick={() => setResultsModalCow(null)}
+              className="text-primary hover:underline font-medium"
+            >
+              Full detail page →
+            </Link>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   )
 }
