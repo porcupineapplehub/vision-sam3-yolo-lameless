@@ -27,6 +27,8 @@ export interface ConsensusData {
   /** % of responses whose direction matches the majority */
   agreePercent: number
   count: number
+  /** True when every annotator rated this pair as degree=0 (equally lame) */
+  allEqual: boolean
 }
 
 export interface FeedbackResult {
@@ -95,9 +97,10 @@ function parseConsensus(): Map<string, ConsensusData> {
     const key = `${minCow}_${maxCow}`
 
     // Canonical score convention:
-    //   positive → maxCow is more lame (minCow wins/is healthier)
-    //   negative → minCow is more lame (maxCow wins/is healthier)
-    const canonicalScore = winner === minCow ? +degree : -degree
+    //   positive → maxCow is more lame
+    //   negative → minCow is more lame
+    // In this dataset, `winner` means "more lame cow".
+    const canonicalScore = winner === minCow ? -degree : +degree
 
     const existing = pairScores.get(key)
     if (existing) {
@@ -143,6 +146,7 @@ function parseConsensus(): Map<string, ConsensusData> {
       stdev,
       agreePercent,
       count: n,
+      allEqual: scores.every(s => s === 0),
     })
   }
 
@@ -157,77 +161,176 @@ export interface CowRanking {
   cowId: string
   /** 1 = most lame */
   rank: number
-  /** Average lameness signal: positive = more lame, range roughly -3…+3 */
+  /** Average Elo rating across 100 random orderings (higher = more lame) */
   rawScore: number
   /** 0–1 normalized across all cows; 1 = most lame */
   normalizedScore: number
   severity: 'healthy' | 'mild' | 'moderate' | 'severe'
   /** Total individual judgments this cow participated in */
   comparisons: number
-  /** Times judged as the less-lame / healthier cow */
-  wins: number
   /** Times judged as the more-lame cow */
+  wins: number
+  /** Times judged as the less-lame / healthier cow */
   losses: number
   /** Times judged equal (degree 0) */
   ties: number
   videoUrl?: string
 }
 
+// ---------------------------------------------------------------------------
+// Elo rating (mirrors elo_rating_randomize_lame_rank.R)
+// ---------------------------------------------------------------------------
+
 /**
- * Derive a global lameness ranking for every cow that has real comparison data.
- *
- * For each comparison in the CSV, the loser (more lame) receives a positive
- * lameness signal equal to the degree (1–3), and the winner (less lame)
- * receives a negative signal.  The average signal per cow is then
- * min-max normalised to 0–1 and bucketed into severity tiers.
+ * Parse raw CSV judgments into a flat list, replicating each row by its
+ * degree (degree=2 → 2 entries, degree=3 → 3 entries), matching
+ * replicate_row_df() in the R script.  degree=0 → 1 draw entry.
  */
-export function getCowRankings(): CowRanking[] {
-  const consensus = getConsensusData()
-  const videoMap = getCowVideoMap()
+function parseRawJudgments(): Array<{ winner: string; loser: string; isDraw: boolean }> {
+  const lines = rawCSV.trim().split('\n')
+  const result: Array<{ winner: string; loser: string; isDraw: boolean }> = []
 
-  // Accumulate signed lameness signals per cow
-  // canonical score for pair (minCow, maxCow):
-  //   positive → maxCow is more lame
-  //   negative → minCow is more lame
-  const signals = new Map<string, number[]>()
+  for (const line of lines.slice(1)) {
+    const parts = line.trim().split(',')
+    if (parts.length < 3) continue
+    const winner = parts[0].trim()
+    const loser  = parts[1].trim()
+    const degree = parseInt(parts[2].trim(), 10)
+    if (isNaN(degree) || !winner || !loser) continue
 
-  for (const pair of consensus.values()) {
-    const { minCow, maxCow, scores } = pair
-    for (const c of scores) {
-      if (!signals.has(maxCow)) signals.set(maxCow, [])
-      if (!signals.has(minCow)) signals.set(minCow, [])
-      signals.get(maxCow)!.push(c)   // positive → maxCow more lame
-      signals.get(minCow)!.push(-c)  // flipped  → minCow more lame when negative
+    const isDraw = degree === 0
+    const reps   = isDraw ? 1 : degree   // degree=1→1×, degree=2→2×, degree=3→3×
+    for (let r = 0; r < reps; r++) {
+      result.push({ winner, loser, isDraw })
+    }
+  }
+  return result
+}
+
+/**
+ * Run Elo rating over `judgments` in a shuffled order.
+ * winner = more-lame cow (gains Elo), loser = healthier cow (loses Elo).
+ * k=20 matches the R script default.
+ */
+function runEloIteration(
+  judgments: Array<{ winner: string; loser: string; isDraw: boolean }>,
+  cows: Set<string>,
+  k = 20,
+): Map<string, number> {
+  const elo = new Map<string, number>()
+  for (const cow of cows) elo.set(cow, 1000)
+
+  // Fisher-Yates shuffle
+  const shuffled = [...judgments]
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
+  }
+
+  for (const { winner, loser, isDraw } of shuffled) {
+    const rW = elo.get(winner)!
+    const rL = elo.get(loser)!
+    const eW = 1 / (1 + Math.pow(10, (rL - rW) / 400))
+    const eL = 1 - eW
+    if (isDraw) {
+      elo.set(winner, rW + k * (0.5 - eW))
+      elo.set(loser,  rL + k * (0.5 - eL))
+    } else {
+      elo.set(winner, rW + k * (1   - eW))
+      elo.set(loser,  rL + k * (0   - eL))
+    }
+  }
+  return elo
+}
+
+/**
+ * Compute averaged Elo ratings across `numIterations` random orderings.
+ * Mirrors the 100-iteration averaging in the R script that removes order bias.
+ */
+function computeAverageElo(numIterations = 100): Map<string, number> {
+  const judgments = parseRawJudgments()
+
+  const cows = new Set<string>()
+  for (const { winner, loser } of judgments) {
+    cows.add(winner)
+    cows.add(loser)
+  }
+
+  const sums = new Map<string, number>()
+  for (const cow of cows) sums.set(cow, 0)
+
+  for (let i = 0; i < numIterations; i++) {
+    const iter = runEloIteration(judgments, cows)
+    for (const [cow, rating] of iter) {
+      sums.set(cow, sums.get(cow)! + rating)
     }
   }
 
-  // Compute per-cow raw scores
-  const rows: {
-    cowId: string; raw: number; comparisons: number
-    wins: number; losses: number; ties: number
-  }[] = []
+  const avg = new Map<string, number>()
+  for (const [cow, total] of sums) {
+    avg.set(cow, total / numIterations)
+  }
+  return avg
+}
 
-  for (const [cowId, sigs] of signals.entries()) {
-    const raw = sigs.reduce((a, b) => a + b, 0) / sigs.length
-    rows.push({
-      cowId,
-      raw,
-      comparisons: sigs.length,
-      wins:   sigs.filter(s => s < 0).length,   // less lame = win
-      losses: sigs.filter(s => s > 0).length,   // more lame = loss
-      ties:   sigs.filter(s => s === 0).length,
-    })
+// ---------------------------------------------------------------------------
+// Cow ranking
+// ---------------------------------------------------------------------------
+
+/**
+ * Derive a global lameness ranking using Elo rating, matching the methodology
+ * in elo_rating_randomize_lame_rank.R:
+ *  - Each row is replicated by its degree (higher certainty = more evidence)
+ *  - degree=0 → draw (both cows equally lame)
+ *  - 100 random orderings are averaged to remove order bias (k=20)
+ *  - Winner = more-lame cow → higher Elo
+ *  - normalizedScore: 0=healthiest, 1=most lame
+ */
+export function getCowRankings(): CowRanking[] {
+  if (_cowRankings) return _cowRankings
+  _cowRankings = _computeCowRankings()
+  return _cowRankings
+}
+
+function _computeCowRankings(): CowRanking[] {
+  const videoMap = getCowVideoMap()
+  const avgElo   = computeAverageElo(100)
+
+  // Per-cow wins/losses/ties from raw CSV (one entry per original row)
+  const stats = new Map<string, { wins: number; losses: number; ties: number; comparisons: number }>()
+  const lines = rawCSV.trim().split('\n')
+  for (const line of lines.slice(1)) {
+    const parts = line.trim().split(',')
+    if (parts.length < 3) continue
+    const winner = parts[0].trim()
+    const loser  = parts[1].trim()
+    const degree = parseInt(parts[2].trim(), 10)
+    if (isNaN(degree) || !winner || !loser) continue
+
+    for (const cow of [winner, loser]) {
+      if (!stats.has(cow)) stats.set(cow, { wins: 0, losses: 0, ties: 0, comparisons: 0 })
+    }
+    const ws = stats.get(winner)!
+    const ls = stats.get(loser)!
+    if (degree === 0) {
+      ws.ties++; ws.comparisons++
+      ls.ties++; ls.comparisons++
+    } else {
+      ws.wins++;   ws.comparisons++
+      ls.losses++; ls.comparisons++
+    }
   }
 
-  // Sort descending by raw score (most lame first)
-  rows.sort((a, b) => b.raw - a.raw)
+  // Sort by Elo descending → most lame first (highest Elo = most-lame)
+  const sorted = [...avgElo.entries()].sort((a, b) => b[1] - a[1])
 
-  const minRaw = rows[rows.length - 1]?.raw ?? 0
-  const maxRaw = rows[0]?.raw ?? 1
-  const range = maxRaw - minRaw || 1
+  const maxElo = sorted[0]?.[1] ?? 1
+  const minElo = sorted[sorted.length - 1]?.[1] ?? 0
+  const range  = maxElo - minElo || 1
 
-  return rows.map((item, idx) => {
-    const n = (item.raw - minRaw) / range  // 0–1, 1 = most lame
+  return sorted.map(([cowId, eloRating], idx) => {
+    // normalizedScore: 1 = most lame (highest Elo), 0 = healthiest (lowest Elo)
+    const n = (eloRating - minElo) / range
 
     let severity: CowRanking['severity']
     if (n >= 0.75) severity = 'severe'
@@ -235,17 +338,19 @@ export function getCowRankings(): CowRanking[] {
     else if (n >= 0.25) severity = 'mild'
     else severity = 'healthy'
 
+    const s = stats.get(cowId) ?? { wins: 0, losses: 0, ties: 0, comparisons: 0 }
+
     return {
-      cowId: item.cowId,
+      cowId,
       rank: idx + 1,
-      rawScore: item.raw,
+      rawScore: eloRating,
       normalizedScore: n,
       severity,
-      comparisons: item.comparisons,
-      wins: item.wins,
-      losses: item.losses,
-      ties: item.ties,
-      videoUrl: videoMap.get(item.cowId),
+      comparisons: s.comparisons,
+      wins:   s.wins,
+      losses: s.losses,
+      ties:   s.ties,
+      videoUrl: videoMap.get(cowId),
     }
   })
 }
@@ -257,6 +362,7 @@ export function getCowRankings(): CowRanking[] {
 let _cowVideoMap: Map<string, string> | null = null
 let _consensusData: Map<string, ConsensusData> | null = null
 let _demoPairs: DemoConsensusPair[] | null = null
+let _cowRankings: CowRanking[] | null = null
 
 export function getCowVideoMap(): Map<string, string> {
   if (!_cowVideoMap) _cowVideoMap = buildCowVideoMap()

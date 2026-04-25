@@ -7,9 +7,7 @@ import { cn } from '@/lib/utils'
 import { getRandomDemoPair, parseDemoCSV, resetDemoCache, type DemoPair } from '@/utils/demoData'
 import {
   getValidDemoPairs,
-  computeFeedback,
   type DemoConsensusPair,
-  type FeedbackResult,
 } from '@/utils/pairwiseConsensus'
 
 // ── Task definitions ─────────────────────────────────────────────────────────
@@ -43,7 +41,7 @@ const PAIRWISE_TASKS: PairwiseTask[] = [
     id: 2,
     name: 'UBC Farm 2',
     description: 'Afternoon session — Spring 2021',
-    pairCount: 12,
+    pairCount: 10,
     completedPeople: 8,
     requiredPeople: 20,
     color: 'from-violet-500 to-violet-600',
@@ -67,7 +65,7 @@ const PAIRWISE_TASKS: PairwiseTask[] = [
     id: 4,
     name: 'UBC Farm 4',
     description: 'Expert validation — Fall 2021',
-    pairCount: 8,
+    pairCount: 10,
     completedPeople: 2,
     requiredPeople: 20,
     color: 'from-rose-500 to-rose-600',
@@ -77,11 +75,9 @@ const PAIRWISE_TASKS: PairwiseTask[] = [
   },
 ]
 
-// Pair offsets: task i starts at sum of pairCounts of tasks 0..i-1
-const TASK_OFFSETS = PAIRWISE_TASKS.reduce<number[]>((acc, task, idx) => {
-  acc.push(idx === 0 ? 0 : acc[idx - 1] + PAIRWISE_TASKS[idx - 1].pairCount)
-  return acc
-}, [])
+// Evenly spread 4 tasks across all 435 pairs (435 / 4 ≈ 108 apart)
+// Task k starts at k * floor(totalPairs / numTasks)
+const TASK_OFFSETS = [0, 108, 217, 326]
 
 interface VideoPair {
   video_id_1: string
@@ -142,10 +138,6 @@ export default function PairwiseReview() {
   const [demoIndex, setDemoIndex] = useState(0)
   const [demoPairs, setDemoPairs] = useState<DemoConsensusPair[]>([])
   const [showDemoComplete, setShowDemoComplete] = useState(false)
-
-  // Consensus feedback shown after each demo submission
-  const [feedbackResult, setFeedbackResult] = useState<FeedbackResult | null>(null)
-  const [showFeedback, setShowFeedback] = useState(false)
 
   useEffect(() => {
     if (useDemo) {
@@ -236,7 +228,6 @@ export default function PairwiseReview() {
       setDemoPair(null)
       setDemoIndex(0)
       setShowDemoComplete(false)
-      setShowFeedback(false)
       setIsPlaying(true)
       setLoading(false)
       return
@@ -248,8 +239,6 @@ export default function PairwiseReview() {
     setDemoPair(shuffled[0])
     setDemoIndex(0)
     setShowDemoComplete(false)
-    setShowFeedback(false)
-    setFeedbackResult(null)
     setIsPlaying(true)
     setLoading(false)
   }
@@ -261,7 +250,16 @@ export default function PairwiseReview() {
     const offset = TASK_OFFSETS[task.id - 1]
     const taskPairs: DemoConsensusPair[] = []
     for (let i = 0; i < task.pairCount; i++) {
-      taskPairs.push(allPairs[(offset + i) % allPairs.length])
+      const pair = allPairs[(offset + i) % allPairs.length]
+      // Randomly assign which cow appears on the left (matching the original study)
+      const flipped = Math.random() < 0.5
+      taskPairs.push(flipped ? {
+        ...pair,
+        cow_L: pair.cow_R,
+        cow_R: pair.cow_L,
+        cow_L_URL: pair.cow_R_URL,
+        cow_R_URL: pair.cow_L_URL,
+      } : pair)
     }
 
     setSelectedTask(task)
@@ -273,8 +271,6 @@ export default function PairwiseReview() {
     setDemoPair(taskPairs[0])
     setDemoIndex(0)
     setShowDemoComplete(false)
-    setShowFeedback(false)
-    setFeedbackResult(null)
     setIsPlaying(true)
     setLoading(false)
   }
@@ -286,8 +282,6 @@ export default function PairwiseReview() {
     setDemoPair(null)
     setDemoIndex(0)
     setShowDemoComplete(false)
-    setShowFeedback(false)
-    setFeedbackResult(null)
     setIsPlaying(false)
     setLoading(false)
   }
@@ -339,10 +333,16 @@ export default function PairwiseReview() {
     setSubmitting(true)
     
     if (demoMode && demoPair) {
-      // Compute instant consensus feedback
-      const feedback = computeFeedback(demoPair.cow_L, demoPair.cow_R, selectedValue)
-      setFeedbackResult(feedback)
-      setShowFeedback(true)
+      const isLastPair = demoIndex === demoPairs.length - 1
+      if (isLastPair) {
+        setShowDemoComplete(true)
+      } else {
+        const nextIndex = demoIndex + 1
+        setDemoPair(demoPairs[nextIndex])
+        setDemoIndex(nextIndex)
+        setSelectedValue(null)
+        setIsPlaying(true)
+      }
       setSubmitting(false)
       return
     }
@@ -385,22 +385,6 @@ export default function PairwiseReview() {
       alert('Failed to submit comparison')
     } finally {
       setSubmitting(false)
-    }
-  }
-
-  const handleFeedbackNext = () => {
-    setShowFeedback(false)
-    setFeedbackResult(null)
-    setSelectedValue(null)
-
-    const isLastPair = demoIndex === demoPairs.length - 1
-    if (isLastPair) {
-      setShowDemoComplete(true)
-    } else {
-      const nextIndex = demoIndex + 1
-      setDemoPair(demoPairs[nextIndex])
-      setDemoIndex(nextIndex)
-      setIsPlaying(true)
     }
   }
 
@@ -497,13 +481,19 @@ export default function PairwiseReview() {
       <div className="max-w-4xl mx-auto space-y-8 animate-fade-in">
         {/* Header */}
         <div className="text-center">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-primary to-primary/60 mb-4 shadow-lg shadow-primary/20">
-            <span className="text-3xl">🐄</span>
-          </div>
           <h1 className="text-3xl font-bold mb-2">Pairwise Comparison Tasks</h1>
-          <p className="text-muted-foreground max-w-lg mx-auto">
+          <p className="text-muted-foreground whitespace-nowrap">
             Select a task to start comparing cow walking videos. Each task contains a set of video pairs from the same farm session.
           </p>
+          <div className="mt-4 flex items-center justify-center gap-2 flex-wrap">
+            <span className="text-sm text-muted-foreground">Not sure how to do it?</span>
+            <button
+              onClick={() => navigate('/pairwise-tutorial')}
+              className="px-3 py-1.5 rounded-lg border border-primary text-primary text-sm font-medium hover:bg-primary/10 transition-colors"
+            >
+              Click Tutorial
+            </button>
+          </div>
         </div>
 
         {/* Task Cards */}
@@ -937,8 +927,8 @@ export default function PairwiseReview() {
             {t('pairwise.share')}
           </button>
           <button
-            onClick={() => navigate('/learn')}
-            className="px-3 py-1.5 text-muted-foreground hover:text-foreground"
+            onClick={() => navigate('/pairwise-tutorial')}
+            className="px-3 py-1.5 border border-primary text-primary rounded-lg hover:bg-primary/10 font-medium"
           >
             Tutorial
           </button>
@@ -1073,70 +1063,7 @@ export default function PairwiseReview() {
             </button>
           </div>
 
-          {/* ── Feedback overlay (shown after demo submission) ── */}
-          {showFeedback && feedbackResult ? (
-            <div
-              className={`rounded-2xl border-2 p-6 text-center space-y-3 transition-all ${
-                feedbackResult.type === 'great'
-                  ? 'bg-emerald-500/10 border-emerald-500/40'
-                  : feedbackResult.type === 'good'
-                  ? 'bg-blue-500/10 border-blue-500/40'
-                  : feedbackResult.type === 'interesting'
-                  ? 'bg-amber-500/10 border-amber-500/40'
-                  : 'bg-red-500/10 border-red-500/40'
-              }`}
-            >
-              <div className="text-5xl animate-bounce">{feedbackResult.emoji}</div>
-              <div className="text-xl font-bold text-foreground">{feedbackResult.message}</div>
-              <div className="text-sm text-muted-foreground max-w-sm mx-auto">
-                {feedbackResult.details}
-              </div>
-
-              {/* Mini bar showing user vs consensus */}
-              <div className="flex items-center gap-3 max-w-xs mx-auto mt-2">
-                <span className="text-xs text-muted-foreground w-16 text-right">Left lamer</span>
-                <div className="relative flex-1 h-3 bg-muted rounded-full overflow-visible">
-                  {/* Consensus tick */}
-                  <div
-                    className="absolute top-1/2 -translate-y-1/2 w-1 h-5 bg-primary rounded-full"
-                    style={{ left: `${((feedbackResult.consensusMean + 3) / 6) * 100}%` }}
-                    title={`Consensus: ${feedbackResult.consensusMean.toFixed(1)}`}
-                  />
-                  {/* User tick */}
-                  <div
-                    className="absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full border-2 border-foreground bg-background"
-                    style={{ left: `calc(${((feedbackResult.userCanonical + 3) / 6) * 100}% - 6px)` }}
-                    title={`Your answer: ${feedbackResult.userCanonical}`}
-                  />
-                </div>
-                <span className="text-xs text-muted-foreground w-16">Right lamer</span>
-              </div>
-              <div className="flex gap-2 justify-center text-xs text-muted-foreground">
-                <span className="flex items-center gap-1">
-                  <span className="inline-block w-3 h-0.5 bg-primary rounded" /> Consensus
-                </span>
-                <span className="flex items-center gap-1">
-                  <span className="inline-block w-3 h-3 rounded-full border-2 border-foreground bg-background" /> You
-                </span>
-              </div>
-
-              <button
-                onClick={handleFeedbackNext}
-                className={`mt-2 px-8 py-2 rounded-lg font-medium text-white transition-colors ${
-                  feedbackResult.type === 'great'
-                    ? 'bg-emerald-600 hover:bg-emerald-700'
-                    : feedbackResult.type === 'good'
-                    ? 'bg-blue-600 hover:bg-blue-700'
-                    : feedbackResult.type === 'interesting'
-                    ? 'bg-amber-600 hover:bg-amber-700'
-                    : 'bg-red-600 hover:bg-red-700'
-                }`}
-              >
-                {demoIndex === demoPairs.length - 1 ? '🏁 Finish' : 'Next Pair →'}
-              </button>
-            </div>
-          ) : (
-            <>
+          <>
               {/* 7-Point Comparison Scale - Circular Buttons */}
               <div className="space-y-2">
                 <label className="block text-center font-medium text-foreground text-sm">
@@ -1194,42 +1121,6 @@ export default function PairwiseReview() {
                 </button>
               </div>
             </>
-          )}
-
-          {/* Lameness Indicators Guide */}
-          <div className="bg-muted/50 rounded-lg p-4 text-sm">
-            <h4 className="font-semibold mb-2">What to Look For:</h4>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="flex items-start gap-2">
-                <span className="text-red-500">●</span>
-                <div>
-                  <div className="font-medium">Arched Back</div>
-                  <div className="text-muted-foreground">Hunched posture while walking</div>
-                </div>
-              </div>
-              <div className="flex items-start gap-2">
-                <span className="text-orange-500">●</span>
-                <div>
-                  <div className="font-medium">Head Bobbing</div>
-                  <div className="text-muted-foreground">Up/down head movement</div>
-                </div>
-              </div>
-              <div className="flex items-start gap-2">
-                <span className="text-yellow-500">●</span>
-                <div>
-                  <div className="font-medium">Uneven Stride</div>
-                  <div className="text-muted-foreground">Favoring one leg</div>
-                </div>
-              </div>
-              <div className="flex items-start gap-2">
-                <span className="text-blue-500">●</span>
-                <div>
-                  <div className="font-medium">Slow Movement</div>
-                  <div className="text-muted-foreground">Hesitant or cautious gait</div>
-                </div>
-              </div>
-            </div>
-          </div>
 
           {/* Keyboard shortcuts */}
           <div className="text-center text-xs text-muted-foreground">

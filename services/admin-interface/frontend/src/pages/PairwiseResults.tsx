@@ -128,7 +128,7 @@ function SortHeader({
 export default function PairwiseResults() {
   const navigate = useNavigate()
   const [search, setSearch] = useState('')
-  const [sortKey, setSortKey] = useState<SortKey>('agreePercent')
+  const [sortKey, setSortKey] = useState<SortKey>('absMean')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
 
   // Load consensus data (cached, computed once)
@@ -140,9 +140,13 @@ export default function PairwiseResults() {
   // Summary stats
   const summary = useMemo(() => {
     const totalJudgments = allPairs.reduce((s, p) => s + p.count, 0)
-    const avgAgree = allPairs.reduce((s, p) => s + p.agreePercent, 0) / (allPairs.length || 1)
-    const strongConsensus = allPairs.filter(p => p.agreePercent >= 75).length
-    return { totalPairs: allPairs.length, totalJudgments, avgAgree, strongConsensus }
+    const directionalPairs = allPairs.filter(p => !p.allEqual)
+    const avgAgree = directionalPairs.length
+      ? directionalPairs.reduce((s, p) => s + p.agreePercent, 0) / directionalPairs.length
+      : 0
+    const strongConsensus = directionalPairs.filter(p => p.agreePercent >= 75).length
+    const equalPairs = allPairs.filter(p => p.allEqual).length
+    return { totalPairs: allPairs.length, totalJudgments, avgAgree, strongConsensus, equalPairs }
   }, [allPairs])
 
   // Filter + sort
@@ -199,7 +203,7 @@ export default function PairwiseResults() {
       </div>
 
       {/* Summary cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         {[
           {
             label: 'Unique Pairs',
@@ -223,11 +227,18 @@ export default function PairwiseResults() {
             bg: 'bg-amber-500/10',
           },
           {
-            label: 'Strong Consensus',
+            label: 'Strong Consensus (≥75%)',
             value: `${summary.strongConsensus} pairs`,
             icon: CheckCircle2,
             color: 'text-emerald-500',
             bg: 'bg-emerald-500/10',
+          },
+          {
+            label: 'All Equal Pairs',
+            value: `${summary.equalPairs} pairs`,
+            icon: Minus,
+            color: 'text-slate-500',
+            bg: 'bg-slate-500/10',
           },
         ].map(card => {
           const Icon = card.icon
@@ -323,9 +334,15 @@ export default function PairwiseResults() {
 
                 {/* Agreement % */}
                 <div>
-                  <div className={`inline-flex items-center px-2 py-0.5 rounded-full border text-xs font-bold ${agreementBg(pair.agreePercent)} ${agreementColor(pair.agreePercent)}`}>
-                    {pair.agreePercent.toFixed(0)}%
-                  </div>
+                  {pair.allEqual ? (
+                    <div className="inline-flex items-center px-2 py-0.5 rounded-full border text-xs font-bold bg-slate-500/10 text-slate-500 border-slate-500/30">
+                      All Equal
+                    </div>
+                  ) : (
+                    <div className={`inline-flex items-center px-2 py-0.5 rounded-full border text-xs font-bold ${agreementBg(pair.agreePercent)} ${agreementColor(pair.agreePercent)}`}>
+                      {pair.agreePercent.toFixed(0)}%
+                    </div>
+                  )}
                 </div>
 
                 {/* Mean ± stdev */}
@@ -381,7 +398,11 @@ export default function PairwiseResults() {
           <span className="font-medium text-emerald-500">≥80%</span>
           <span className="font-medium text-amber-500 ml-2">65–79%</span>
           <span className="font-medium text-rose-500 ml-2">&lt;65%</span>
-          agreement tiers
+          agreement tiers (directional pairs only)
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="font-medium text-slate-500">All Equal</span>
+          = all annotators rated this pair as equally lame (degree=0)
         </div>
       </div>
     </div>

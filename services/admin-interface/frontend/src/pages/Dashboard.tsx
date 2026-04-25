@@ -2,7 +2,7 @@
  * Dashboard Page
  * Premium overview with modern metric cards and data visualization
  */
-import { useEffect, useState, useRef, Fragment } from 'react'
+import { useEffect, useState, Fragment } from 'react'
 import { Link } from 'react-router-dom'
 import { cn } from '@/lib/utils'
 import { videosApi, trainingApi } from '@/api/client'
@@ -28,7 +28,6 @@ import {
   Trophy,
   ChevronDown,
   ChevronUp,
-  X,
 } from 'lucide-react'
 
 export default function Dashboard() {
@@ -43,8 +42,6 @@ export default function Dashboard() {
   const [topLameCows, setTopLameCows] = useState<CowRanking[]>([])
   const [loading, setLoading] = useState(true)
   const [expandedCowId, setExpandedCowId] = useState<string | null>(null)
-  const [resultsModalCow, setResultsModalCow] = useState<CowRanking | null>(null)
-  const allRankings = useRef<CowRanking[]>([])
 
   useEffect(() => {
     if (useDemo) {
@@ -85,8 +82,6 @@ export default function Dashboard() {
     // 30 cows in our dataset → 30*29/2 = 435 possible pairs
     const totalPossible = (rankings.length * (rankings.length - 1)) / 2
 
-    allRankings.current = rankings
-
     // Build synthetic "video" rows so the table isn't empty
     const demoVideos = rankings.map((r) => ({
       video_id: r.cowId,
@@ -100,6 +95,7 @@ export default function Dashboard() {
       rank: r.rank,
       videoUrl: r.videoUrl || '',
       severity: r.severity,
+      normalizedScore: r.normalizedScore,
     }))
 
     setVideos(demoVideos)
@@ -519,9 +515,9 @@ export default function Dashboard() {
                     {useDemo && <th className="w-12 text-center">Rank</th>}
                     <th>Cow</th>
                     <th>Status</th>
-                    <th>Label</th>
+                    <th>{useDemo ? 'Elo Score' : 'Label'}</th>
                     {!useDemo && <th>Size</th>}
-                    <th></th>
+                    {!useDemo && <th></th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -597,15 +593,39 @@ export default function Dashboard() {
                             </div>
                           </td>
                           <td>
-                            {video.has_label ? (
-                              <span className={cn(
-                                "badge",
-                                video.label === 0 ? 'badge-success' : 'badge-destructive'
-                              )}>
-                                {video.label === 0 ? 'Sound' : 'Lame'}
-                              </span>
+                            {useDemo ? (
+                              <div className="flex items-center gap-2 min-w-[80px]">
+                                <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
+                                  <div
+                                    className={cn(
+                                      "h-full rounded-full",
+                                      (video.normalizedScore ?? 0) >= 0.75 ? 'bg-red-500' :
+                                      (video.normalizedScore ?? 0) >= 0.50 ? 'bg-orange-500' :
+                                      (video.normalizedScore ?? 0) >= 0.25 ? 'bg-amber-500' : 'bg-emerald-500'
+                                    )}
+                                    style={{ width: `${((video.normalizedScore ?? 0) * 100).toFixed(0)}%` }}
+                                  />
+                                </div>
+                                <span className={cn(
+                                  "text-xs font-mono font-semibold tabular-nums",
+                                  (video.normalizedScore ?? 0) >= 0.75 ? 'text-red-500' :
+                                  (video.normalizedScore ?? 0) >= 0.50 ? 'text-orange-500' :
+                                  (video.normalizedScore ?? 0) >= 0.25 ? 'text-amber-500' : 'text-emerald-500'
+                                )}>
+                                  {((video.normalizedScore ?? 0) * 100).toFixed(0)}%
+                                </span>
+                              </div>
                             ) : (
-                              <span className="text-muted-foreground text-xs">Unlabeled</span>
+                              video.has_label ? (
+                                <span className={cn(
+                                  "badge",
+                                  video.label === 0 ? 'badge-success' : 'badge-destructive'
+                                )}>
+                                  {video.label === 0 ? 'Sound' : 'Lame'}
+                                </span>
+                              ) : (
+                                <span className="text-muted-foreground text-xs">Unlabeled</span>
+                              )
                             )}
                           </td>
                           {!useDemo && (
@@ -613,36 +633,26 @@ export default function Dashboard() {
                               {(video.file_size / 1024 / 1024).toFixed(1)} MB
                             </td>
                           )}
-                          <td className="text-right">
-                            <div className="flex gap-2 justify-end">
-                              <Link
-                                to={useDemo ? `/cows/${video.video_id}` : `/video/${video.video_id}`}
-                                className="px-3 py-1.5 text-xs font-medium rounded-lg bg-muted hover:bg-muted/80 transition-colors"
-                              >
-                                View
-                              </Link>
-                              {useDemo ? (
-                                <button
-                                  onClick={() => {
-                                    const ranking = allRankings.current.find(r => r.cowId === video.video_id)
-                                    if (ranking) setResultsModalCow(ranking)
-                                  }}
-                                  className="px-3 py-1.5 text-xs font-medium rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+                          {!useDemo && (
+                            <td className="text-right">
+                              <div className="flex gap-2 justify-end">
+                                <Link
+                                  to={`/video/${video.video_id}`}
+                                  className="px-3 py-1.5 text-xs font-medium rounded-lg bg-muted hover:bg-muted/80 transition-colors"
                                 >
-                                  Results
-                                </button>
-                              ) : (
-                                video.has_analysis && (
+                                  View
+                                </Link>
+                                {video.has_analysis && (
                                   <Link
                                     to={`/results/${video.video_id}`}
                                     className="px-3 py-1.5 text-xs font-medium rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
                                   >
                                     Results
                                   </Link>
-                                )
-                              )}
-                            </div>
-                          </td>
+                                )}
+                              </div>
+                            </td>
+                          )}
                         </tr>
                         {isExpanded && (
                           <tr className="bg-muted/30">
@@ -665,19 +675,30 @@ export default function Dashboard() {
                                 <div className="flex-1 min-w-0">
                                   <div className="font-semibold font-mono text-base mb-1">Cow {video.video_id}</div>
                                   <div className="flex gap-2 flex-wrap mb-3">
-                                    <span className={cn("badge", video.label === 0 ? 'badge-success' : 'badge-destructive')}>
-                                      {video.label === 0 ? 'Sound' : 'Lame'}
-                                    </span>
-                                    {useDemo && video.severity && (
-                                      <span className="badge badge-muted capitalize">{video.severity}</span>
+                                    {!useDemo && (
+                                      <span className={cn("badge", video.label === 0 ? 'badge-success' : 'badge-destructive')}>
+                                        {video.label === 0 ? 'Sound' : 'Lame'}
+                                      </span>
                                     )}
                                     {useDemo && (
                                       <span className="badge bg-muted text-muted-foreground">Rank #{video.rank}</span>
                                     )}
+                                    {useDemo && (
+                                      <span className={cn(
+                                        "badge",
+                                        (video.normalizedScore ?? 0) >= 0.75 ? 'bg-red-500/15 text-red-500' :
+                                        (video.normalizedScore ?? 0) >= 0.50 ? 'bg-orange-500/15 text-orange-500' :
+                                        (video.normalizedScore ?? 0) >= 0.25 ? 'bg-amber-500/15 text-amber-500' : 'bg-emerald-500/15 text-emerald-500'
+                                      )}>
+                                        {((video.normalizedScore ?? 0) * 100).toFixed(0)}% lame
+                                      </span>
+                                    )}
                                   </div>
-                                  <p className="text-xs text-muted-foreground">
-                                    Click <strong>Results</strong> to see pairwise comparison history, or <strong>View</strong> to open the full detail page.
-                                  </p>
+                                  {!useDemo && (
+                                    <p className="text-xs text-muted-foreground">
+                                      Click <strong>Results</strong> to see pairwise comparison history, or <strong>View</strong> to open the full detail page.
+                                    </p>
+                                  )}
                                 </div>
                               </div>
                             </td>
@@ -694,106 +715,6 @@ export default function Dashboard() {
       </div>
     </div>
 
-    {/* Pairwise Results Modal */}
-    {resultsModalCow && (
-
-      <div
-        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
-        onClick={() => setResultsModalCow(null)}
-      >
-        <div
-          className="premium-card w-full max-w-md p-6 relative animate-fade-in"
-          onClick={e => e.stopPropagation()}
-        >
-          <button
-            onClick={() => setResultsModalCow(null)}
-            className="absolute top-4 right-4 p-1 rounded-lg hover:bg-muted transition-colors"
-          >
-            <X className="h-4 w-4" />
-          </button>
-
-          <div className="flex items-center gap-3 mb-5">
-            <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
-              <Trophy className="h-5 w-5 text-primary" />
-            </div>
-            <div>
-              <h3 className="font-semibold text-base">Cow {resultsModalCow.cowId}</h3>
-              <p className="text-xs text-muted-foreground">Pairwise rating results</p>
-            </div>
-          </div>
-
-          {/* Rank & Score */}
-          <div className="grid grid-cols-2 gap-3 mb-5">
-            <div className="rounded-xl bg-muted/50 p-3 text-center">
-              <div className="text-2xl font-bold">
-                {resultsModalCow.rank === 1 ? '🥇' : resultsModalCow.rank === 2 ? '🥈' : resultsModalCow.rank === 3 ? '🥉' : `#${resultsModalCow.rank}`}
-              </div>
-              <div className="text-xs text-muted-foreground mt-1">Global Rank</div>
-            </div>
-            <div className="rounded-xl bg-muted/50 p-3 text-center">
-              <div className={cn(
-                "text-2xl font-bold",
-                resultsModalCow.severity === 'severe' ? 'text-red-500' :
-                resultsModalCow.severity === 'moderate' ? 'text-orange-500' :
-                resultsModalCow.severity === 'mild' ? 'text-yellow-500' : 'text-green-500'
-              )}>
-                {Math.round(resultsModalCow.normalizedScore * 100)}%
-              </div>
-              <div className="text-xs text-muted-foreground mt-1 capitalize">{resultsModalCow.severity}</div>
-            </div>
-          </div>
-
-          {/* Lameness score bar */}
-          <div className="mb-5">
-            <div className="flex justify-between text-xs text-muted-foreground mb-1">
-              <span>Lameness score</span>
-              <span>{(resultsModalCow.normalizedScore * 100).toFixed(1)}%</span>
-            </div>
-            <div className="h-2 rounded-full bg-muted overflow-hidden">
-              <div
-                className={cn(
-                  "h-full rounded-full transition-all",
-                  resultsModalCow.severity === 'severe' ? 'bg-red-500' :
-                  resultsModalCow.severity === 'moderate' ? 'bg-orange-500' :
-                  resultsModalCow.severity === 'mild' ? 'bg-yellow-500' : 'bg-green-500'
-                )}
-                style={{ width: `${resultsModalCow.normalizedScore * 100}%` }}
-              />
-            </div>
-          </div>
-
-          {/* Win / Loss / Tie breakdown */}
-          <div className="grid grid-cols-3 gap-2 mb-5">
-            <div className="rounded-xl bg-green-500/10 p-3 text-center">
-              <div className="text-xl font-bold text-green-500">{resultsModalCow.wins}</div>
-              <div className="text-xs text-muted-foreground mt-0.5">Wins</div>
-              <div className="text-[10px] text-muted-foreground">(healthier)</div>
-            </div>
-            <div className="rounded-xl bg-red-500/10 p-3 text-center">
-              <div className="text-xl font-bold text-red-500">{resultsModalCow.losses}</div>
-              <div className="text-xs text-muted-foreground mt-0.5">Losses</div>
-              <div className="text-[10px] text-muted-foreground">(lamer)</div>
-            </div>
-            <div className="rounded-xl bg-muted/50 p-3 text-center">
-              <div className="text-xl font-bold text-muted-foreground">{resultsModalCow.ties}</div>
-              <div className="text-xs text-muted-foreground mt-0.5">Ties</div>
-              <div className="text-[10px] text-muted-foreground">(equal)</div>
-            </div>
-          </div>
-
-          <div className="flex items-center justify-between text-xs text-muted-foreground border-t border-border/50 pt-4">
-            <span>{resultsModalCow.comparisons} total judgments</span>
-            <Link
-              to={`/cows/${resultsModalCow.cowId}`}
-              onClick={() => setResultsModalCow(null)}
-              className="text-primary hover:underline font-medium"
-            >
-              Full detail page →
-            </Link>
-          </div>
-        </div>
-      </div>
-    )}
     </>
   )
 }

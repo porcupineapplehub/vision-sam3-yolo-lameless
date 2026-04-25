@@ -95,10 +95,11 @@ export default function Layout({ children }: LayoutProps) {
   }, [])
 
   const navItems = [
-    { path: '/', label: t('nav.dashboard'), icon: Home, roles: ['admin', 'researcher', 'rater'] },
+    { path: '/dashboard', label: t('nav.dashboard'), icon: Home, roles: ['admin', 'researcher', 'rater'] },
     { path: '/upload', label: 'Upload', icon: Upload, roles: ['admin', 'researcher'] },
     { path: '/cows', label: t('nav.cowRegistry'), icon: Beef, roles: ['admin', 'researcher', 'rater'] },
     { path: '/pairwise', label: t('nav.pairwise'), icon: GitCompare, roles: ['admin', 'researcher', 'rater'] },
+    { path: '/pairwise-tutorial', label: 'Pairwise Tutorial', icon: BookOpen, roles: ['admin', 'researcher', 'rater'] },
     // { path: '/triplet', label: t('nav.triplet'), icon: Triangle, roles: ['admin', 'researcher', 'rater'] },
     { path: '/performance', label: 'Performance', icon: Activity, roles: ['rater'] },
     { path: '/pair-results', label: 'Pair Results', icon: BarChart2, roles: ['admin', 'researcher', 'rater'] },
