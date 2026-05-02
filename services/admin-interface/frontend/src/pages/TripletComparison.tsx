@@ -402,7 +402,7 @@ export default function TripletComparison() {
     )
   }
 
-  const questionText = task.task_type === 'similarity'
+  const questionText = task?.task_type === 'similarity'
     ? 'Which cow walks MORE SIMILARLY to the reference?'
     : 'Which cow walks MORE DIFFERENTLY from the reference?'
 
@@ -413,7 +413,7 @@ export default function TripletComparison() {
         <div>
           <h2 className="text-3xl font-bold">Triplet Comparison</h2>
           <p className="text-muted-foreground mt-1">
-            {task.task_type === 'similarity' 
+            {task?.task_type === 'similarity' 
               ? 'Select which cow walks most similarly to the reference'
               : 'Select which cow walks most differently from the reference'}
           </p>
@@ -456,11 +456,11 @@ export default function TripletComparison() {
       {/* Task Type Badge */}
       <div className="flex justify-center">
         <span className={`px-4 py-2 rounded-full text-sm font-medium ${
-          task.task_type === 'similarity'
+          task?.task_type === 'similarity'
             ? 'bg-primary/10 text-primary'
             : 'bg-secondary text-secondary-foreground'
         }`}>
-          {task.task_type === 'similarity' ? '🔗 Similarity Task' : '↔️ Dissimilarity Task'}
+          {task?.task_type === 'similarity' ? '🔗 Similarity Task' : '↔️ Dissimilarity Task'}
         </span>
       </div>
 
@@ -481,7 +481,7 @@ export default function TripletComparison() {
           <div className="border-4 border-warning rounded-lg overflow-hidden">
             <video
               ref={refVideoRef}
-              src={demoMode ? ((window as any)._demoTripletData?.reference?.cow_L_URL || '') : videosApi.getStreamUrl(task.reference_id)}
+              src={demoMode ? ((window as any)._demoTripletData?.reference?.cow_L_URL || '') : task ? videosApi.getStreamUrl(task.reference_id) : ''}
               className="w-full aspect-video bg-black"
               loop
               muted
@@ -506,7 +506,7 @@ export default function TripletComparison() {
           >
             <video
               ref={compAVideoRef}
-              src={demoMode ? ((window as any)._demoTripletData?.comparison_a?.cow_L_URL || '') : videosApi.getStreamUrl(task.comparison_a_id)}
+              src={demoMode ? ((window as any)._demoTripletData?.comparison_a?.cow_L_URL || '') : task ? videosApi.getStreamUrl(task.comparison_a_id) : ''}
               className="w-full aspect-video bg-black"
               loop
               muted
@@ -548,7 +548,7 @@ export default function TripletComparison() {
           >
             <video
               ref={compBVideoRef}
-              src={demoMode ? ((window as any)._demoTripletData?.comparison_b?.cow_L_URL || '') : videosApi.getStreamUrl(task.comparison_b_id)}
+              src={demoMode ? ((window as any)._demoTripletData?.comparison_b?.cow_L_URL || '') : task ? videosApi.getStreamUrl(task.comparison_b_id) : ''}
               className="w-full aspect-video bg-black"
               loop
               muted
@@ -625,7 +625,7 @@ export default function TripletComparison() {
           <li>Watch the <strong>Reference cow</strong> carefully first</li>
           <li>Then compare both A and B to the reference</li>
           <li>
-            {task.task_type === 'similarity'
+            {task?.task_type === 'similarity'
               ? 'Select which cow walks most SIMILARLY to the reference'
               : 'Select which cow walks most DIFFERENTLY from the reference'}
           </li>

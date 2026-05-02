@@ -206,7 +206,7 @@ export default function CowDetail() {
             confidence: 0.85,
             severity_level: demoCow.severity,
             observation_date: new Date(now - daysAgo * oneDay).toISOString()
-          },
+          } as any,
           last_prediction_update: new Date(now - daysAgo * oneDay).toISOString()
         })
         
@@ -236,7 +236,7 @@ export default function CowDetail() {
             severity_level: weekScore > 0.75 ? 'severe' : weekScore > 0.5 ? 'moderate' : weekScore > 0.3 ? 'mild' : 'healthy',
             human_validated: i === 0 || i === 3, // Mark some as validated
             confidence: 0.75 + Math.random() * 0.2
-          }
+          } as any
         }).reverse() // Oldest to newest for chart
         setTimeline(timelineEntries)
         setTrend(Math.random() > 0.5 ? 'stable' : 'improving')
@@ -249,7 +249,7 @@ export default function CowDetail() {
           recorded_date: new Date(now - daysAgo * oneDay).toISOString(),
           lameness_score: score,
           created_at: new Date(now - daysAgo * oneDay).toISOString()
-        }])
+        } as any])
         
         setEditTag(tags[Math.floor(Math.random() * tags.length)])
         setEditNotes('Demo cow from demo_cows.csv')
