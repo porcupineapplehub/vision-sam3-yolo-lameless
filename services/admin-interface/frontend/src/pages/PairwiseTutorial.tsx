@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { cn } from '@/lib/utils'
+import { useLanguage } from '@/contexts/LanguageContext'
 import {
   computeFeedback,
   getValidDemoPairs,
@@ -76,6 +77,7 @@ function buildTutorialPairs(): TutorialPair[] {
 
 export default function PairwiseTutorial() {
   const navigate = useNavigate()
+  const { t } = useLanguage()
   const video1Ref = useRef<HTMLVideoElement>(null)
   const video2Ref = useRef<HTMLVideoElement>(null)
 
@@ -153,13 +155,13 @@ export default function PairwiseTutorial() {
   return (
     <div className="max-w-5xl mx-auto space-y-5">
       <div className="rounded-xl border border-primary/30 bg-primary/10 p-5">
-        <h2 className="text-2xl font-bold">Pairwise Tutorial</h2>
+        <h2 className="text-2xl font-bold">{t('tutorial.title')}</h2>
         <p className="text-sm text-muted-foreground mt-1">
-          5 high-contrast examples from consensus results. Feedback appears immediately when you select a score.
+          {t('tutorial.subtitle')}
         </p>
         <div className="mt-3 flex items-center gap-3 text-sm">
-          <span className="font-medium">Pair {index + 1} / {pairs.length}</span>
-          <span className="text-muted-foreground">Answered: {completedCount}/{pairs.length}</span>
+          <span className="font-medium">{t('tutorial.step')} {index + 1} {t('tutorial.of')} {pairs.length}</span>
+          <span className="text-muted-foreground">{t('tutorial.answered')} {completedCount}/{pairs.length}</span>
         </div>
         <div className="mt-2 h-2 rounded-full bg-primary/20 overflow-hidden">
           <div
@@ -169,9 +171,43 @@ export default function PairwiseTutorial() {
         </div>
       </div>
 
+      <div className="bg-muted/50 rounded-lg p-4 text-sm">
+        <h4 className="font-semibold mb-2">{t('tutorial.whatToLookFor')}</h4>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="flex items-start gap-2">
+            <span className="text-red-500">●</span>
+            <div>
+              <div className="font-medium">{t('tutorial.archedBack')}</div>
+              <div className="text-muted-foreground">{t('tutorial.archedBackDesc')}</div>
+            </div>
+          </div>
+          <div className="flex items-start gap-2">
+            <span className="text-orange-500">●</span>
+            <div>
+              <div className="font-medium">{t('tutorial.headBobbing')}</div>
+              <div className="text-muted-foreground">{t('tutorial.headBobbingDesc')}</div>
+            </div>
+          </div>
+          <div className="flex items-start gap-2">
+            <span className="text-yellow-500">●</span>
+            <div>
+              <div className="font-medium">{t('tutorial.unevenStride')}</div>
+              <div className="text-muted-foreground">{t('tutorial.unevenStrideDesc')}</div>
+            </div>
+          </div>
+          <div className="flex items-start gap-2">
+            <span className="text-blue-500">●</span>
+            <div>
+              <div className="font-medium">{t('tutorial.slowMovement')}</div>
+              <div className="text-muted-foreground">{t('tutorial.slowMovementDesc')}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-1">
-          <div className="text-center font-semibold">Left Cow ({current.leftCowId})</div>
+          <div className="text-center font-semibold">{t('pairwise.leftCow')} ({current.leftCowId})</div>
           <video
             ref={video1Ref}
             src={current.leftUrl}
@@ -184,7 +220,7 @@ export default function PairwiseTutorial() {
           />
         </div>
         <div className="space-y-1">
-          <div className="text-center font-semibold">Right Cow ({current.rightCowId})</div>
+          <div className="text-center font-semibold">{t('pairwise.rightCow')} ({current.rightCowId})</div>
           <video
             ref={video2Ref}
             src={current.rightUrl}
@@ -203,13 +239,14 @@ export default function PairwiseTutorial() {
           onClick={togglePlayback}
           className="px-5 py-1.5 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 text-sm"
         >
-          {isPlaying ? 'Pause' : 'Play'}
+          {isPlaying ? t('pairwise.pause') : t('pairwise.play')}
         </button>
         <button
-          onClick={restartVideos}
-          className="px-5 py-1.5 border border-border rounded-lg hover:bg-accent text-sm"
+          onClick={nextPair}
+          disabled={selectedValue === null}
+          className="px-5 py-1.5 border border-border rounded-lg hover:bg-accent text-sm disabled:opacity-50"
         >
-          Restart
+          {index === pairs.length - 1 ? t('tutorial.finish') : t('tutorial.nextPair')}
         </button>
       </div>
 
@@ -311,53 +348,12 @@ export default function PairwiseTutorial() {
         </div>
       )}
 
-      <div className="bg-muted/50 rounded-lg p-4 text-sm">
-        <h4 className="font-semibold mb-2">What to Look For:</h4>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="flex items-start gap-2">
-            <span className="text-red-500">●</span>
-            <div>
-              <div className="font-medium">Arched Back</div>
-              <div className="text-muted-foreground">Hunched posture while walking</div>
-            </div>
-          </div>
-          <div className="flex items-start gap-2">
-            <span className="text-orange-500">●</span>
-            <div>
-              <div className="font-medium">Head Bobbing</div>
-              <div className="text-muted-foreground">Up/down head movement</div>
-            </div>
-          </div>
-          <div className="flex items-start gap-2">
-            <span className="text-yellow-500">●</span>
-            <div>
-              <div className="font-medium">Uneven Stride</div>
-              <div className="text-muted-foreground">Favoring one leg</div>
-            </div>
-          </div>
-          <div className="flex items-start gap-2">
-            <span className="text-blue-500">●</span>
-            <div>
-              <div className="font-medium">Slow Movement</div>
-              <div className="text-muted-foreground">Hesitant or cautious gait</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
       <div className="flex justify-center gap-3">
         <button
           onClick={() => navigate('/pairwise')}
           className="px-5 py-2 rounded-lg border border-border hover:bg-accent"
         >
-          Skip Tutorial
-        </button>
-        <button
-          onClick={nextPair}
-          disabled={selectedValue === null}
-          className="px-6 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-        >
-          {index === pairs.length - 1 ? 'Finish Tutorial' : 'Next Pair'}
+          {t('pairwise.skipTutorial')}
         </button>
       </div>
     </div>

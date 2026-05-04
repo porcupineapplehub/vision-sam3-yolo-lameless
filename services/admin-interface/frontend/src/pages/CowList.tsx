@@ -4,6 +4,7 @@ import { cowsApi, CowIdentity } from '@/api/client'
 import { cn } from '@/lib/utils'
 import { Search, Loader2, ChevronLeft, ChevronRight, Activity, Trophy } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
+import { useLanguage } from '@/contexts/LanguageContext'
 import { getCowRankings } from '@/utils/pairwiseConsensus'
 
 interface RankedCow extends CowIdentity {
@@ -11,6 +12,7 @@ interface RankedCow extends CowIdentity {
   wins?: number
   losses?: number
   comparisons?: number
+  rawScore?: number
 }
 
 interface SeverityStats {
@@ -31,6 +33,7 @@ interface CowStats {
 
 export default function CowList() {
   const { user } = useAuth()
+  const { t } = useLanguage()
   const isGuest = user?.id === 'guest'
   const useDemo = isGuest || user?.role === 'rater'
 
@@ -192,7 +195,7 @@ export default function CowList() {
       {/* Header */}
       <div className="flex items-center justify-between animate-slide-in-up">
         <div>
-          <h1 className="text-2xl font-bold">Cow Registry</h1>
+          <h1 className="text-2xl font-bold">{t('nav.cowRegistry')}</h1>
           <p className="text-muted-foreground">Track and monitor individual cows across video analyses</p>
           {useDemo && (
             <div className="mt-1">
@@ -204,13 +207,11 @@ export default function CowList() {
         </div>
       </div>
 
-      {/* Stats Cards */}
+      {/* Stats Cards - Removed Active and Status blocks */}
       {stats && (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
           {[
             { label: 'Total Cows', value: stats.total_cows, icon: '🐮', color: 'text-foreground' },
-            { label: 'Active', value: stats.active_cows, icon: '✅', color: 'text-emerald-500' },
-            { label: 'Videos Tracked', value: stats.total_videos_tracked, icon: '📹', color: 'text-blue-500' },
             { label: 'Healthy', value: stats.severity_distribution.healthy, color: 'text-emerald-500' },
             { label: 'Moderate', value: stats.severity_distribution.moderate + stats.severity_distribution.mild, color: 'text-amber-500' },
             { label: 'Severe', value: stats.severity_distribution.severe, color: 'text-red-500' },
@@ -318,7 +319,7 @@ export default function CowList() {
                     onClick={() => handleSort('score')}
                   >
                     <div className="flex items-center gap-1">
-                      Normalized Score
+                      Elo Score
                       {sortBy === 'score' && (
                         <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
                       )}
@@ -350,7 +351,6 @@ export default function CowList() {
                       </th>
                     </>
                   )}
-                  <th>Status</th>
                   {!useDemo && <th className="text-right">Actions</th>}
                 </tr>
               </thead>
@@ -392,19 +392,8 @@ export default function CowList() {
                     <td>
                       {cow.current_score !== null && cow.current_score !== undefined ? (
                         <div className="flex items-center gap-2">
-                          <div className="w-16 bg-muted rounded-full h-2 overflow-hidden">
-                            <div
-                              className={cn(
-                                "h-full rounded-full transition-all",
-                                cow.current_score < 0.3 ? 'bg-emerald-500' :
-                                cow.current_score < 0.5 ? 'bg-amber-500' :
-                                cow.current_score < 0.7 ? 'bg-orange-500' : 'bg-red-500'
-                              )}
-                              style={{ width: `${cow.current_score * 100}%` }}
-                            />
-                          </div>
-                          <span className="text-sm font-mono">
-                            {(cow.current_score * 100).toFixed(0)}%
+                          <span className="text-sm font-mono font-medium">
+                            {useDemo ? ((cow as RankedCow).rawScore || 0).toFixed(1) : cow.current_score.toFixed(1)}
                           </span>
                         </div>
                       ) : (
@@ -421,13 +410,6 @@ export default function CowList() {
                         </td>
                       </>
                     )}
-                    <td>
-                      {cow.is_active ? (
-                        <span className="badge badge-success">Active</span>
-                      ) : (
-                        <span className="badge badge-muted">Inactive</span>
-                      )}
-                    </td>
                     {!useDemo && (
                       <td className="text-right">
                         <Link

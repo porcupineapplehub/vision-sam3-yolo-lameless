@@ -52,6 +52,7 @@ const translations: Record<Language, Record<string, string>> = {
     
     // Tutorial
     'tutorial.title': 'Pairwise Comparison Tutorial',
+    'tutorial.subtitle': '5 high-contrast examples from consensus results. Feedback appears immediately when you select a score.',
     'tutorial.step': 'Step',
     'tutorial.of': 'of',
     'tutorial.correct': 'Correct!',
@@ -60,6 +61,18 @@ const translations: Record<Language, Record<string, string>> = {
     'tutorial.nextExample': 'Next Example',
     'tutorial.startReal': 'Start Real Comparisons',
     'tutorial.score': 'Score:',
+    'tutorial.whatToLookFor': 'What to Look For:',
+    'tutorial.archedBack': 'Arched Back',
+    'tutorial.archedBackDesc': 'Hunched posture while walking',
+    'tutorial.headBobbing': 'Head Bobbing',
+    'tutorial.headBobbingDesc': 'Up/down head movement',
+    'tutorial.unevenStride': 'Uneven Stride',
+    'tutorial.unevenStrideDesc': 'Favoring one leg',
+    'tutorial.slowMovement': 'Slow Movement',
+    'tutorial.slowMovementDesc': 'Hesitant or cautious gait',
+    'tutorial.finish': 'Finish Tutorial',
+    'tutorial.nextPair': 'Next Pair',
+    'tutorial.answered': 'Answered:',
     
     // Triplet
     'triplet.title': 'Triplet Comparison',
@@ -143,6 +156,7 @@ const translations: Record<Language, Record<string, string>> = {
     
     // Tutorial
     'tutorial.title': 'Tutoriel de comparaison par paires',
+    'tutorial.subtitle': '5 exemples contrastés tirés des résultats du consensus. Les commentaires apparaissent immédiatement lorsque vous sélectionnez un score.',
     'tutorial.step': 'Étape',
     'tutorial.of': 'sur',
     'tutorial.correct': 'Correct!',
@@ -151,6 +165,18 @@ const translations: Record<Language, Record<string, string>> = {
     'tutorial.nextExample': 'Exemple suivant',
     'tutorial.startReal': 'Commencer les vraies comparaisons',
     'tutorial.score': 'Score:',
+    'tutorial.whatToLookFor': 'Ce qu\'il faut observer:',
+    'tutorial.archedBack': 'Dos voûté',
+    'tutorial.archedBackDesc': 'Posture voûtée en marchant',
+    'tutorial.headBobbing': 'Hochement de tête',
+    'tutorial.headBobbingDesc': 'Mouvement de la tête de haut en bas',
+    'tutorial.unevenStride': 'Foulée inégale',
+    'tutorial.unevenStrideDesc': 'Favorise une patte',
+    'tutorial.slowMovement': 'Mouvement lent',
+    'tutorial.slowMovementDesc': 'Démarche hésitante ou prudente',
+    'tutorial.finish': 'Terminer le tutoriel',
+    'tutorial.nextPair': 'Paire suivante',
+    'tutorial.answered': 'Répondu:',
     
     // Triplet
     'triplet.title': 'Comparaison en triplet',
