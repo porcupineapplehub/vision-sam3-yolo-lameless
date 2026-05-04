@@ -94,25 +94,22 @@ export default function Layout({ children }: LayoutProps) {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [])
 
-  const navItems = [
-    { path: '/dashboard', label: t('nav.dashboard'), icon: Home, roles: ['admin', 'researcher', 'rater'] },
-    { path: '/upload', label: 'Upload', icon: Upload, roles: ['admin', 'researcher'] },
-    { path: '/cows', label: t('nav.cowRegistry'), icon: Beef, roles: ['admin', 'researcher', 'rater'] },
-    { path: '/pairwise', label: t('nav.pairwise'), icon: GitCompare, roles: ['admin', 'researcher', 'rater'] },
-    { path: '/pairwise-tutorial', label: 'Pairwise Tutorial', icon: BookOpen, roles: ['admin', 'researcher', 'rater'] },
-    // { path: '/triplet', label: t('nav.triplet'), icon: Triangle, roles: ['admin', 'researcher', 'rater'] },
-    { path: '/performance', label: 'Performance', icon: Activity, roles: ['rater'] },
-    { path: '/pair-results', label: 'Pair Results', icon: BarChart2, roles: ['admin', 'researcher', 'rater'] },
-    { path: '/hierarchy', label: t('nav.hierarchy'), icon: Network, roles: ['admin', 'researcher'] },
-    { path: '/similarity', label: t('nav.similarity'), icon: Map, roles: ['admin', 'researcher'] },
-    // { path: '/learn', label: t('nav.learn'), icon: GraduationCap, roles: ['admin', 'researcher', 'rater'] },
-    { path: '/pipelines', label: 'Pipelines', icon: Activity, roles: ['admin', 'researcher'] },
-    { path: '/health', label: 'Health', icon: Heart, roles: ['admin', 'researcher'] },
-    { path: '/training', label: 'Queue', icon: ListTodo, roles: ['admin', 'researcher'] },
-    { path: '/config', label: 'ML Config', icon: Cpu, roles: ['admin', 'researcher'] },
-    { path: '/users', label: 'Users', icon: Users, roles: ['admin'] },
-    { path: '/tutorials', label: 'Tutorials', icon: BookOpen, roles: ['admin'] },
-  ]
+    const navItems = [
+      { path: '/dashboard', label: t('nav.dashboard'), icon: Home, roles: ['admin', 'researcher', 'rater'] },
+      { path: '/upload', label: 'Upload', icon: Upload, roles: ['admin', 'researcher'] },
+      { path: '/pairwise', label: t('nav.pairwise'), icon: GitCompare, roles: ['admin', 'researcher', 'rater'] },
+      { path: '/pairwise-tutorial', label: t('nav.pairwiseTutorial'), icon: BookOpen, roles: ['admin', 'researcher', 'rater'] },
+      { path: '/performance', label: t('nav.performance'), icon: Activity, roles: ['rater'] },
+      { path: '/pair-results', label: t('nav.pairResults'), icon: BarChart2, roles: ['admin', 'researcher', 'rater'] },
+      { path: '/hierarchy', label: t('nav.hierarchy'), icon: Network, roles: ['admin', 'researcher'] },
+      { path: '/similarity', label: t('nav.similarity'), icon: Map, roles: ['admin', 'researcher'] },
+      { path: '/pipelines', label: 'Pipelines', icon: Activity, roles: ['admin', 'researcher'] },
+      { path: '/health', label: 'Health', icon: Heart, roles: ['admin', 'researcher'] },
+      { path: '/training', label: 'Queue', icon: ListTodo, roles: ['admin', 'researcher'] },
+      { path: '/config', label: 'ML Config', icon: Cpu, roles: ['admin', 'researcher'] },
+      { path: '/users', label: 'Users', icon: Users, roles: ['admin'] },
+      { path: '/tutorials', label: 'Tutorials', icon: BookOpen, roles: ['admin'] },
+    ]
 
   const handleLogout = async () => {
     await logout()

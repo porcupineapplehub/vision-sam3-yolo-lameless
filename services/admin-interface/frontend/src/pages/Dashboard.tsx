@@ -96,6 +96,7 @@ export default function Dashboard() {
       videoUrl: r.videoUrl || '',
       severity: r.severity,
       normalizedScore: r.normalizedScore,
+      rawScore: r.rawScore,
     }))
 
     setVideos(demoVideos)
@@ -546,7 +547,7 @@ export default function Dashboard() {
                               <div>
                                 <div className="font-medium font-mono">{video.video_id}</div>
                                 <div className="text-xs text-muted-foreground">
-                                  {useDemo ? 'pairwise comparison' : video.filename}
+                                  {!useDemo && video.filename}
                                 </div>
                               </div>
                             </div>
@@ -575,24 +576,13 @@ export default function Dashboard() {
                           <td>
                             {useDemo ? (
                               <div className="flex items-center gap-2 min-w-[80px]">
-                                <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
-                                  <div
-                                    className={cn(
-                                      "h-full rounded-full",
-                                      (video.normalizedScore ?? 0) >= 0.75 ? 'bg-red-500' :
-                                      (video.normalizedScore ?? 0) >= 0.50 ? 'bg-orange-500' :
-                                      (video.normalizedScore ?? 0) >= 0.25 ? 'bg-amber-500' : 'bg-emerald-500'
-                                    )}
-                                    style={{ width: `${((video.normalizedScore ?? 0) * 100).toFixed(0)}%` }}
-                                  />
-                                </div>
                                 <span className={cn(
-                                  "text-xs font-mono font-semibold tabular-nums",
+                                  "text-sm font-mono font-medium tabular-nums",
                                   (video.normalizedScore ?? 0) >= 0.75 ? 'text-red-500' :
                                   (video.normalizedScore ?? 0) >= 0.50 ? 'text-orange-500' :
                                   (video.normalizedScore ?? 0) >= 0.25 ? 'text-amber-500' : 'text-emerald-500'
                                 )}>
-                                  {((video.normalizedScore ?? 0) * 100).toFixed(0)}%
+                                  {video.rawScore?.toFixed(1) || 0}
                                 </span>
                               </div>
                             ) : (
@@ -670,7 +660,7 @@ export default function Dashboard() {
                                         (video.normalizedScore ?? 0) >= 0.50 ? 'bg-orange-500/15 text-orange-500' :
                                         (video.normalizedScore ?? 0) >= 0.25 ? 'bg-amber-500/15 text-amber-500' : 'bg-emerald-500/15 text-emerald-500'
                                       )}>
-                                        {((video.normalizedScore ?? 0) * 100).toFixed(0)}% lame
+                                        {video.rawScore?.toFixed(1) || 0} Elo Score
                                       </span>
                                     )}
                                   </div>
