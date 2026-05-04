@@ -481,17 +481,17 @@ export default function PairwiseReview() {
       <div className="max-w-4xl mx-auto space-y-8 animate-fade-in">
         {/* Header */}
         <div className="text-center">
-          <h1 className="text-3xl font-bold mb-2">Pairwise Comparison Tasks</h1>
+          <h1 className="text-3xl font-bold mb-2">{t('pairwise.tasksTitle')}</h1>
           <p className="text-muted-foreground whitespace-nowrap">
-            Select a task to start comparing cow walking videos. Each task contains a set of video pairs from the same farm session.
+            {t('pairwise.tasksSubtitle')}
           </p>
           <div className="mt-4 flex items-center justify-center gap-2 flex-wrap">
-            <span className="text-sm text-muted-foreground">Not sure how to do it?</span>
+            <span className="text-sm text-muted-foreground">{t('pairwise.notSure')}</span>
             <button
               onClick={() => navigate('/pairwise-tutorial')}
               className="px-3 py-1.5 rounded-lg border border-primary text-primary text-sm font-medium hover:bg-primary/10 transition-colors"
             >
-              Click Tutorial
+              {t('pairwise.clickTutorial')}
             </button>
           </div>
         </div>
@@ -516,7 +516,7 @@ export default function PairwiseReview() {
                 {/* Completed badge */}
                 {isCompleted && (
                   <div className="absolute top-4 right-4 flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-500 text-xs font-medium">
-                    ✓ Completed
+                    ✓ {t('pairwise.completed')}
                   </div>
                 )}
 
@@ -540,18 +540,18 @@ export default function PairwiseReview() {
                     "px-2.5 py-1 rounded-lg text-xs font-semibold",
                     task.bgColor, task.textColor
                   )}>
-                    {task.pairCount} pairs
+                    {task.pairCount} {t('pairwise.pairs')}
                   </span>
                   <span className="text-xs text-muted-foreground">·</span>
                   <span className="text-xs text-muted-foreground">
-                    {task.completedPeople}/{task.requiredPeople} raters completed
+                    {task.completedPeople}/{task.requiredPeople} {t('pairwise.ratersCompleted')}
                   </span>
                 </div>
 
                 {/* Progress bar */}
                 <div>
                   <div className="flex justify-between text-xs text-muted-foreground mb-1.5">
-                    <span>Completion</span>
+                    <span>{t('pairwise.completion')}</span>
                     <span className="font-medium text-foreground">{progressPct}%</span>
                   </div>
                   <div className="h-2 rounded-full bg-muted overflow-hidden">
@@ -575,7 +575,7 @@ export default function PairwiseReview() {
                   )}
                   onClick={(e) => { e.stopPropagation(); handleTaskSelect(task) }}
                 >
-                  {isCompleted ? 'Redo Task' : 'Start Task →'}
+                  {isCompleted ? t('pairwise.redoTask') : t('pairwise.startTaskArrow')}
                 </button>
               </div>
             )
@@ -803,19 +803,19 @@ export default function PairwiseReview() {
         
         <div className="relative z-10">
           <div className="text-6xl mb-4 animate-bounce">🎉</div>
-          <h2 className="text-3xl font-bold mb-4">Task Complete!</h2>
+          <h2 className="text-3xl font-bold mb-4">{t('pairwise.taskComplete')}</h2>
           <p className="text-muted-foreground mb-2">
-            You've finished all {selectedTask?.pairCount ?? demoPairs.length} comparisons
-            {selectedTask ? ` for ${selectedTask.name}` : ''}.
+            {t('pairwise.finishedAll')} {selectedTask?.pairCount ?? demoPairs.length} {t('pairwise.comparisons')}
+            {selectedTask ? ` ${t('pairwise.comparisonsFor')} ${selectedTask.name}` : ''}.
           </p>
-          <p className="text-muted-foreground mb-8">Great work — your responses help improve lameness detection!</p>
+          <p className="text-muted-foreground mb-8">{t('pairwise.allCompleteMsg')}</p>
           <div className="flex gap-4 justify-center flex-wrap">
             {useDemo && (
               <button
                 onClick={handleBackToTasks}
                 className="px-6 py-3 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90"
               >
-                ← Back to Tasks
+                ← {t('pairwise.backToTasks')}
               </button>
             )}
             <button

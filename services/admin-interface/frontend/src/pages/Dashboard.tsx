@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils'
 import { videosApi, trainingApi } from '@/api/client'
 import { useAuth } from '@/contexts/AuthContext'
 import { getCowRankings, getConsensusData, type CowRanking } from '@/utils/pairwiseConsensus'
+import { useLanguage } from '@/contexts/LanguageContext'
 import {
   TrendingUp,
   Video,
@@ -32,6 +33,7 @@ import {
 
 export default function Dashboard() {
   const { user } = useAuth()
+  const { t } = useLanguage()
   const isGuest = user?.id === 'guest'
   const useDemo = isGuest || user?.role === 'rater'
 
@@ -191,22 +193,15 @@ export default function Dashboard() {
       <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
         <div className="animate-slide-in-up">
           <h1 className="text-3xl font-bold flex items-center gap-3">
-            Dashboard
+            {t('nav.dashboard')}
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-primary/10 text-primary text-sm font-medium">
               <Sparkles className="h-3.5 w-3.5" />
               {useDemo ? 'Demo' : 'Live'}
             </span>
           </h1>
           <p className="text-muted-foreground mt-1">
-            Overview of your lameness detection research pipeline
+            {t('dashboard.overview')}
           </p>
-          {useDemo && (
-            <div className="mt-2">
-              <span className="px-2 py-0.5 bg-warning/20 text-warning rounded-full text-xs font-medium">
-                🎯 Demo Mode — Data from pairwise comparison CSV
-              </span>
-            </div>
-          )}
         </div>
         {!useDemo && (
           <div className="flex gap-2">
@@ -280,26 +275,23 @@ export default function Dashboard() {
                   />
                 </div>
               </div>
-              <p className="text-sm text-muted-foreground mb-4">
-                <span className="font-medium text-foreground">{pairwiseStats.total_comparisons}</span> total comparisons made
-              </p>
               <Link
                 to="/pairwise"
                 className="flex items-center justify-between p-3 rounded-xl bg-muted/50 hover:bg-muted transition-colors group"
               >
-                <span className="text-sm font-medium">Continue Comparing</span>
+                <span className="text-sm font-medium">{t('dashboard.continueComparing')}</span>
                 <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:translate-x-1 transition-transform" />
               </Link>
             </>
           ) : (
-            <div className="text-center py-6">
-              <div className="w-12 h-12 rounded-full bg-muted mx-auto flex items-center justify-center mb-3">
-                <Target className="h-6 w-6 text-muted-foreground" />
-              </div>
-              <p className="text-sm text-muted-foreground">
-                Upload at least 2 videos to start pairwise comparisons
-              </p>
+          <div className="text-center py-6">
+            <div className="w-12 h-12 rounded-full bg-muted mx-auto flex items-center justify-center mb-3">
+              <Target className="h-6 w-6 text-muted-foreground" />
             </div>
+            <p className="text-sm text-muted-foreground">
+              {t('dashboard.uploadToStart')}
+            </p>
+          </div>
           )}
         </div>
 
@@ -375,8 +367,8 @@ export default function Dashboard() {
                   <Trophy className="h-5 w-5 text-white" />
                 </div>
                 <div>
-                  <h3 className="font-semibold">Most Lame</h3>
-                  <p className="text-xs text-muted-foreground">Top 5 by pairwise consensus</p>
+                  <h3 className="font-semibold">{t('dashboard.mostLame')}</h3>
+                  <p className="text-xs text-muted-foreground">{t('dashboard.top5')}</p>
                 </div>
               </div>
               <div className="space-y-2">
@@ -393,7 +385,7 @@ export default function Dashboard() {
                       cow.severity === 'mild'     ? 'bg-amber-500/15 text-amber-500' :
                                                     'bg-emerald-500/15 text-emerald-500'
                     )}>
-                      {cow.severity}
+                      {(cow.rawScore || 0).toFixed(1)}
                     </span>
                     <span className="text-xs text-muted-foreground font-mono w-12 text-right">
                       {(cow.normalizedScore * 100).toFixed(0)}%
@@ -405,7 +397,7 @@ export default function Dashboard() {
                 to="/cows"
                 className="flex items-center justify-between p-3 rounded-xl bg-muted/50 hover:bg-muted transition-colors group mt-3"
               >
-                <span className="text-sm font-medium">View Full Registry</span>
+                <span className="text-sm font-medium">{t('dashboard.viewFullRegistry')}</span>
                 <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:translate-x-1 transition-transform" />
               </Link>
             </>
@@ -464,9 +456,9 @@ export default function Dashboard() {
       {/* Recent Videos */}
       <div className="animate-slide-in-up" style={{ animationDelay: '0.6s', animationFillMode: 'backwards' }}>
         <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-semibold">{useDemo ? 'Cow Lameness Ranking' : 'Recent Videos'}</h2>
+          <h2 className="text-xl font-semibold">{useDemo ? t('dashboard.cowRanking') : t('dashboard.recentVideos')}</h2>
           <span className="text-sm text-muted-foreground">
-            Showing {Math.min(10, videos.length)} of {videos.length} {useDemo ? 'cows' : 'videos'}
+            {t('dashboard.showing')} {Math.min(10, videos.length)} {t('dashboard.of')} {videos.length} {useDemo ? t('dashboard.cows') : t('dashboard.videos')}
           </span>
         </div>
         
@@ -478,13 +470,13 @@ export default function Dashboard() {
               </div>
               <div className="absolute -inset-2 bg-primary/10 rounded-3xl blur-xl" />
             </div>
-            <h3 className="text-lg font-semibold mb-2">No videos yet</h3>
+            <h3 className="text-lg font-semibold mb-2">{t('dashboard.noVideos')}</h3>
             <p className="text-muted-foreground mb-6 max-w-sm mx-auto">
-              Upload cow walking videos to start your lameness analysis journey
+              {t('dashboard.uploadToStartJourney')}
             </p>
             <Link to="/upload" className="btn-premium inline-flex items-center gap-2">
               <Upload className="h-4 w-4" />
-              Upload Videos
+              {t('dashboard.uploadVideos')}
             </Link>
           </div>
         ) : (
@@ -493,11 +485,11 @@ export default function Dashboard() {
               <table className="premium-table">
                 <thead>
                   <tr>
-                    {useDemo && <th className="w-12 text-center">Rank</th>}
-                    <th>Cow</th>
-                    <th>Status</th>
-                    <th>{useDemo ? 'Elo Score' : 'Label'}</th>
-                    {!useDemo && <th>Size</th>}
+                    {useDemo && <th className="w-12 text-center">{t('dashboard.rank')}</th>}
+                    <th>{t('dashboard.cow')}</th>
+                    <th>{t('dashboard.status')}</th>
+                    <th>{useDemo ? t('dashboard.eloScore') : t('dashboard.label')}</th>
+                    {!useDemo && <th>{t('dashboard.size')}</th>}
                     {!useDemo && <th></th>}
                   </tr>
                 </thead>
@@ -556,18 +548,18 @@ export default function Dashboard() {
                             <div className="flex gap-1.5 flex-wrap">
                               {useDemo ? (
                                 video.has_annotated && (
-                                  <span className="badge bg-violet-500/15 text-violet-500">Annotated</span>
+                                  <span className="badge bg-violet-500/15 text-violet-500">{t('dashboard.annotated')}</span>
                                 )
                               ) : (
                                 <>
                                   {video.has_analysis && (
-                                    <span className="badge badge-primary">Analyzed</span>
+                                    <span className="badge badge-primary">{t('dashboard.analyzed')}</span>
                                   )}
                                   {video.has_annotated && (
-                                    <span className="badge bg-violet-500/15 text-violet-500">Annotated</span>
+                                    <span className="badge bg-violet-500/15 text-violet-500">{t('dashboard.annotated')}</span>
                                   )}
                                   {!video.has_analysis && !video.has_annotated && (
-                                    <span className="badge badge-muted">Pending</span>
+                                    <span className="badge badge-muted">{t('dashboard.pending')}</span>
                                   )}
                                 </>
                               )}
@@ -591,10 +583,10 @@ export default function Dashboard() {
                                   "badge",
                                   video.label === 0 ? 'badge-success' : 'badge-destructive'
                                 )}>
-                                  {video.label === 0 ? 'Sound' : 'Lame'}
+                                  {video.label === 0 ? t('dashboard.sound') : t('dashboard.lame')}
                                 </span>
                               ) : (
-                                <span className="text-muted-foreground text-xs">Unlabeled</span>
+                                <span className="text-muted-foreground text-xs">{t('dashboard.unlabeled')}</span>
                               )
                             )}
                           </td>
@@ -610,14 +602,14 @@ export default function Dashboard() {
                                   to={`/video/${video.video_id}`}
                                   className="px-3 py-1.5 text-xs font-medium rounded-lg bg-muted hover:bg-muted/80 transition-colors"
                                 >
-                                  View
+                                  {t('dashboard.view')}
                                 </Link>
                                 {video.has_analysis && (
                                   <Link
                                     to={`/results/${video.video_id}`}
                                     className="px-3 py-1.5 text-xs font-medium rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
                                   >
-                                    Results
+                                    {t('dashboard.results')}
                                   </Link>
                                 )}
                               </div>
@@ -639,7 +631,7 @@ export default function Dashboard() {
                                   />
                                 ) : (
                                   <div className="w-48 h-32 rounded-xl bg-muted flex items-center justify-center">
-                                    <span className="text-xs text-muted-foreground">No video available</span>
+                                    <span className="text-xs text-muted-foreground">{t('dashboard.noVideoAvailable')}</span>
                                   </div>
                                 )}
                                 <div className="flex-1 min-w-0">
@@ -647,11 +639,11 @@ export default function Dashboard() {
                                   <div className="flex gap-2 flex-wrap mb-3">
                                     {!useDemo && (
                                       <span className={cn("badge", video.label === 0 ? 'badge-success' : 'badge-destructive')}>
-                                        {video.label === 0 ? 'Sound' : 'Lame'}
+                                        {video.label === 0 ? t('dashboard.sound') : t('dashboard.lame')}
                                       </span>
                                     )}
                                     {useDemo && (
-                                      <span className="badge bg-muted text-muted-foreground">Rank #{video.rank}</span>
+                                      <span className="badge bg-muted text-muted-foreground">{t('dashboard.rank')} #{video.rank}</span>
                                     )}
                                     {useDemo && (
                                       <span className={cn(
@@ -660,13 +652,13 @@ export default function Dashboard() {
                                         (video.normalizedScore ?? 0) >= 0.50 ? 'bg-orange-500/15 text-orange-500' :
                                         (video.normalizedScore ?? 0) >= 0.25 ? 'bg-amber-500/15 text-amber-500' : 'bg-emerald-500/15 text-emerald-500'
                                       )}>
-                                        {video.rawScore?.toFixed(1) || 0} Elo Score
+                                        {video.rawScore?.toFixed(1) || 0} {t('dashboard.eloScore')}
                                       </span>
                                     )}
                                   </div>
                                   {!useDemo && (
                                     <p className="text-xs text-muted-foreground">
-                                      Click <strong>Results</strong> to see pairwise comparison history, or <strong>View</strong> to open the full detail page.
+                                      {t('dashboard.clickResults')}
                                     </p>
                                   )}
                                 </div>

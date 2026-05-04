@@ -218,7 +218,7 @@ function runEloIteration(
   k = 20,
 ): Map<string, number> {
   const elo = new Map<string, number>()
-  for (const cow of cows) elo.set(cow, 1000)
+  for (const cow of cows) elo.set(cow, 1500)
 
   // Fisher-Yates shuffle
   const shuffled = [...judgments]
