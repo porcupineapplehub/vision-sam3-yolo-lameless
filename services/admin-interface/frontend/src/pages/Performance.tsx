@@ -16,23 +16,23 @@ export default function Performance() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h2 className="text-3xl font-bold">Your Rating Performance</h2>
+        <h2 className="text-3xl font-bold">{t('performance.title')}</h2>
         <p className="text-muted-foreground mt-1">
-          See how well your ratings match with other raters
+          {t('performance.subtitle')}
         </p>
       </div>
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="bg-card border border-border rounded-lg p-6">
-          <div className="text-sm text-muted-foreground mb-1">Total Ratings Completed</div>
+          <div className="text-sm text-muted-foreground mb-1">{t('performance.totalCompleted')}</div>
           <div className="text-4xl font-bold mt-2">{stats.totalRatings}</div>
-          <p className="text-xs text-muted-foreground mt-2">Number of cow comparisons you've rated</p>
+          <p className="text-xs text-muted-foreground mt-2">{t('performance.totalCompletedDesc')}</p>
         </div>
         <div className="bg-card border border-border rounded-lg p-6">
-          <div className="text-sm text-muted-foreground mb-1">Agreement Score</div>
+          <div className="text-sm text-muted-foreground mb-1">{t('performance.agreementScore')}</div>
           <div className="text-4xl font-bold mt-2 text-success">{stats.alignment}%</div>
-          <p className="text-xs text-muted-foreground mt-2">How often your ratings match other raters</p>
+          <p className="text-xs text-muted-foreground mt-2">{t('performance.agreementScoreDesc')}</p>
         </div>
       </div>
 
@@ -41,10 +41,10 @@ export default function Performance() {
         <div className="text-center mb-6">
           <div className="text-6xl font-bold text-success mb-3">{percentileOutperformed}%</div>
           <p className="text-xl font-medium mb-2">
-            You're in the <span className="text-success">Top {100 - percentileOutperformed}%</span>
+            {t('performance.topPercent')} <span className="text-success">{100 - percentileOutperformed}%</span>
           </p>
           <p className="text-muted-foreground">
-            You rate more accurately than {percentileOutperformed} out of 100 raters
+            {t('performance.rateMoreAccurately')} {percentileOutperformed} {t('performance.outOf100')}
           </p>
         </div>
         
@@ -73,39 +73,39 @@ export default function Performance() {
             className="absolute -top-8 text-sm font-bold text-success"
             style={{ left: `${percentileOutperformed}%`, transform: 'translateX(-50%)' }}
           >
-            You are here
+            {t('performance.youAreHere')}
           </div>
         </div>
       </div>
 
       {/* What This Means */}
       <div className="bg-card border border-border rounded-lg p-6">
-        <h3 className="text-xl font-semibold mb-4">What This Means</h3>
+        <h3 className="text-xl font-semibold mb-4">{t('performance.whatThisMeans')}</h3>
         <div className="space-y-4">
           <div className="flex items-start gap-4 p-4 bg-success/10 border border-success/30 rounded-lg">
             <div className="text-3xl">✓</div>
             <div>
-              <div className="font-semibold text-success mb-1">You're Doing Great!</div>
+              <div className="font-semibold text-success mb-1">{t('performance.doingGreat')}</div>
               <div className="text-sm text-muted-foreground">
-                Your ratings are very consistent and match well with other experienced raters. Keep up the good work!
+                {t('performance.doingGreatDesc')}
               </div>
             </div>
           </div>
           <div className="flex items-start gap-4 p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg">
             <div className="text-3xl">🎯</div>
             <div>
-              <div className="font-semibold text-blue-500 mb-1">High Agreement Rate</div>
+              <div className="font-semibold text-blue-500 mb-1">{t('performance.highAgreement')}</div>
               <div className="text-sm text-muted-foreground">
-                {stats.alignment}% of your ratings match the consensus. This shows you can reliably identify lameness in cows.
+                {t('performance.highAgreementDesc1')}{stats.alignment}{t('performance.highAgreementDesc2')}
               </div>
             </div>
           </div>
           <div className="flex items-start gap-4 p-4 bg-muted/50 border border-border rounded-lg">
             <div className="text-3xl">📈</div>
             <div>
-              <div className="font-semibold mb-1">Keep Rating</div>
+              <div className="font-semibold mb-1">{t('performance.keepRating')}</div>
               <div className="text-sm text-muted-foreground">
-                The more comparisons you complete, the more accurate the system becomes at detecting lameness patterns.
+                {t('performance.keepRatingDesc')}
               </div>
             </div>
           </div>

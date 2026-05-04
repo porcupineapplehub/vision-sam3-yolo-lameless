@@ -23,6 +23,8 @@ import {
 } from 'lucide-react'
 import { getConsensusData, type ConsensusData } from '@/utils/pairwiseConsensus'
 
+import { useLanguage } from '@/contexts/LanguageContext'
+
 // ---------------------------------------------------------------------------
 // Types & helpers
 // ---------------------------------------------------------------------------
@@ -127,6 +129,7 @@ function SortHeader({
 
 export default function PairwiseResults() {
   const navigate = useNavigate()
+  const { t } = useLanguage()
   const [search, setSearch] = useState('')
   const [sortKey, setSortKey] = useState<SortKey>('absMean')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
@@ -186,11 +189,10 @@ export default function PairwiseResults() {
         <div>
           <h2 className="text-2xl font-bold flex items-center gap-2">
             <GitCompare className="h-6 w-6 text-primary" />
-            Pair Consensus Results
+            {t('pairResults.title')}
           </h2>
           <p className="text-sm text-muted-foreground mt-1">
-            Crowd consensus analysis from{' '}
-            <span className="font-medium text-foreground">winner_loser_sampled_exchange0_55HITs.csv</span>
+            {t('pairResults.subtitle')}
           </p>
         </div>
         <button
@@ -198,7 +200,7 @@ export default function PairwiseResults() {
           className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 flex items-center gap-2"
         >
           <GitCompare className="h-4 w-4" />
-          Go to Comparison
+          {t('dashboard.continueComparing')}
         </button>
       </div>
 
@@ -206,21 +208,21 @@ export default function PairwiseResults() {
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         {[
           {
-            label: 'Unique Pairs',
+            label: t('pairResults.totalPairs'),
             value: summary.totalPairs,
             icon: GitCompare,
             color: 'text-blue-500',
             bg: 'bg-blue-500/10',
           },
           {
-            label: 'Total Judgments',
+            label: t('pairResults.totalJudgments'),
             value: summary.totalJudgments,
             icon: Users,
             color: 'text-purple-500',
             bg: 'bg-purple-500/10',
           },
           {
-            label: 'Avg. Agreement',
+            label: t('pairResults.avgAgreement'),
             value: `${summary.avgAgree.toFixed(1)}%`,
             icon: TrendingUp,
             color: 'text-amber-500',
@@ -264,12 +266,12 @@ export default function PairwiseResults() {
             type="text"
             value={search}
             onChange={e => setSearch(e.target.value)}
-            placeholder="Filter by cow ID…"
+            placeholder={t('pairResults.searchPlaceholder')}
             className="w-full pl-9 pr-3 py-2 bg-muted/50 border border-border/50 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
           />
         </div>
         <span className="text-sm text-muted-foreground">
-          Showing <span className="font-medium text-foreground">{displayed.length}</span> of {allPairs.length} pairs
+          {t('dashboard.showing')} <span className="font-medium text-foreground">{displayed.length}</span> {t('dashboard.of')} {allPairs.length} {t('pairwise.pairs')}
         </span>
       </div>
 
@@ -277,10 +279,10 @@ export default function PairwiseResults() {
       <div className="bg-card border border-border/50 rounded-xl overflow-hidden">
         {/* Table header */}
         <div className="grid grid-cols-[160px_1fr_100px_110px_70px_160px] gap-4 px-4 py-3 border-b border-border/50 bg-muted/30">
-          <SortHeader label="Pair" sortKey="pairKey" current={sortKey} dir={sortDir} onSort={handleSort} />
-          <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Consensus</div>
-          <SortHeader label="Agreement" sortKey="agreePercent" current={sortKey} dir={sortDir} onSort={handleSort} />
-          <SortHeader label="Strength" sortKey="absMean" current={sortKey} dir={sortDir} onSort={handleSort} />
+          <SortHeader label={t('pairResults.cow')} sortKey="pairKey" current={sortKey} dir={sortDir} onSort={handleSort} />
+          <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t('pairResults.consensus')}</div>
+          <SortHeader label={t('pairResults.agreement')} sortKey="agreePercent" current={sortKey} dir={sortDir} onSort={handleSort} />
+          <SortHeader label={t('pairResults.meanScore')} sortKey="absMean" current={sortKey} dir={sortDir} onSort={handleSort} />
           <SortHeader label="N" sortKey="count" current={sortKey} dir={sortDir} onSort={handleSort} />
           <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Distribution</div>
         </div>
@@ -289,7 +291,7 @@ export default function PairwiseResults() {
         <div className="divide-y divide-border/30 max-h-[60vh] overflow-y-auto">
           {displayed.length === 0 && (
             <div className="py-12 text-center text-muted-foreground text-sm">
-              No pairs match your search.
+              {t('pairResults.noPairsMatch')}
             </div>
           )}
           {displayed.map(pair => {

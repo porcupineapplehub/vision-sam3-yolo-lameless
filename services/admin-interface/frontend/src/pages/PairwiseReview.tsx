@@ -810,14 +810,6 @@ export default function PairwiseReview() {
           </p>
           <p className="text-muted-foreground mb-8">{t('pairwise.allCompleteMsg')}</p>
           <div className="flex gap-4 justify-center flex-wrap">
-            {useDemo && (
-              <button
-                onClick={handleBackToTasks}
-                className="px-6 py-3 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90"
-              >
-                ← {t('pairwise.backToTasks')}
-              </button>
-            )}
             <button
               onClick={() => {
                 setShowDemoComplete(false)
@@ -825,23 +817,12 @@ export default function PairwiseReview() {
                 setDemoIndex(0)
                 setDemoPairs([])
                 setDemoPair(null)
-                if (!useDemo) setSelectedTask(null)
+                setSelectedTask(null)
               }}
-              className="px-6 py-3 border border-primary text-primary rounded-lg hover:bg-primary/10"
+              className="px-6 py-3 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90"
             >
-              Exit Demo
+              {t('pairwise.returnToMainPage')}
             </button>
-            {!useDemo && (
-              <button
-                onClick={() => {
-                  setShowDemoComplete(false)
-                  enableDemoMode()
-                }}
-                className="px-6 py-3 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90"
-              >
-                Try Again
-              </button>
-            )}
           </div>
         </div>
       </div>

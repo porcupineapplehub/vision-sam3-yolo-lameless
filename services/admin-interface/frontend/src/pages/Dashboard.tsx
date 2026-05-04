@@ -387,19 +387,9 @@ export default function Dashboard() {
                     )}>
                       {(cow.rawScore || 0).toFixed(1)}
                     </span>
-                    <span className="text-xs text-muted-foreground font-mono w-12 text-right">
-                      {(cow.normalizedScore * 100).toFixed(0)}%
-                    </span>
                   </div>
                 ))}
               </div>
-              <Link
-                to="/cows"
-                className="flex items-center justify-between p-3 rounded-xl bg-muted/50 hover:bg-muted transition-colors group mt-3"
-              >
-                <span className="text-sm font-medium">{t('dashboard.viewFullRegistry')}</span>
-                <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:translate-x-1 transition-transform" />
-              </Link>
             </>
           ) : (
             <>
